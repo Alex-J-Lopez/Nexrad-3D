@@ -63,8 +63,8 @@ export function buildPointArrays(
   }
 
   return {
-    positions: positions.subarray(0, cursor * 3),
-    colors: colors.subarray(0, cursor * 3),
+    positions: positions.slice(0, cursor * 3),
+    colors: colors.slice(0, cursor * 3),
     pointCount: cursor,
   };
 }

@@ -227,8 +227,8 @@ export function buildGlobeRadarVolumeMesh(
   if (idxCursor === 0) return null;
 
   return {
-    positions: positions.subarray(0, vertCursor * 3),
-    colors: colors.subarray(0, vertCursor * 4),
-    indices: indices.subarray(0, idxCursor),
+    positions: positions.slice(0, vertCursor * 3),
+    colors: colors.slice(0, vertCursor * 4),
+    indices: indices.slice(0, idxCursor),
   };
 }
