@@ -1,3 +1,5 @@
+import "server-only";
+
 function env(key: string, fallback: string): string {
   return process.env[key]?.trim() || fallback;
 }

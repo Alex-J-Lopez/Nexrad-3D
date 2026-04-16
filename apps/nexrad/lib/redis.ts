@@ -1,17 +1,18 @@
 import Redis from "ioredis";
 import { REDIS_URL, REDIS_COMMAND_TIMEOUT_MS } from "./env";
 
-let redis: Redis | null = null;
+const g = globalThis as typeof globalThis & { _nexradRedis?: Redis };
 
 export function getRedis(): Redis {
-  if (!redis) {
-    redis = new Redis(REDIS_URL, {
+  if (!g._nexradRedis) {
+    g._nexradRedis = new Redis(REDIS_URL, {
       maxRetriesPerRequest: 3,
       commandTimeout: REDIS_COMMAND_TIMEOUT_MS,
       lazyConnect: true,
     });
+    g._nexradRedis.on("error", (err) => console.error("[redis] connection error", err));
   }
-  return redis;
+  return g._nexradRedis;
 }
 
 export async function withTimeout<T>(
@@ -24,7 +25,10 @@ export async function withTimeout<T>(
     return await Promise.race([
       operation,
       new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+        timeoutId = setTimeout(
+          () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        );
       }),
     ]);
   } finally {
