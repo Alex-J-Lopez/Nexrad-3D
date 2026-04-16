@@ -21,6 +21,18 @@ export function buildGlobeRadarVolumeMesh(
   const fillInterSweepGaps = options.fillInterSweepGaps !== false;
   const strideClamped = Math.max(1, stride);
 
+  if (process.env.NODE_ENV !== "production") {
+    for (const s of metadata.sweeps) {
+      const effAz = Math.ceil(s.azimuthBins / strideClamped);
+      const effR = Math.ceil(s.radialBins / strideClamped);
+      if (effAz > 1023 || effR > 2047) {
+        console.warn(
+          `[globeRadarMesh] vertexKey overflow: effAz=${effAz} effR=${effR} — reduce stride or bin counts`
+        );
+      }
+    }
+  }
+
   let totalCells = 0;
   for (const s of metadata.sweeps) {
     totalCells += s.azimuthBins * s.radialBins;
@@ -42,6 +54,8 @@ export function buildGlobeRadarVolumeMesh(
     azimuthBins: number;
     radialBins: number;
     sweepIdx: number;
+    azList: number[];
+    rgList: number[];
   };
 
   const layouts: SweepLayout[] = [];
@@ -50,12 +64,24 @@ export function buildGlobeRadarVolumeMesh(
     const sweep = metadata.sweeps[si];
     const { azimuthBins, radialBins } = sweep;
     if (dataOffset + azimuthBins * radialBins > data.length) break;
+    const azList = (() => {
+      const out: number[] = [];
+      for (let i = 0; i < azimuthBins; i += strideClamped) out.push(i);
+      return out;
+    })();
+    const rgList = (() => {
+      const out: number[] = [];
+      for (let i = 0; i < radialBins; i += strideClamped) out.push(i);
+      return out;
+    })();
     layouts.push({
       dataOffset,
       elevationAngleDegrees: sweep.elevationAngleDegrees,
       azimuthBins,
       radialBins,
       sweepIdx: si,
+      azList,
+      rgList,
     });
     dataOffset += azimuthBins * radialBins;
   }
@@ -64,12 +90,6 @@ export function buildGlobeRadarVolumeMesh(
     const v = data[layout.dataOffset + azIdx * layout.radialBins + rIdx];
     if (!Number.isFinite(v) || v === metadata.noDataValue || v < thresholdDbz) return null;
     return v;
-  }
-
-  function decimatedIndices(count: number): number[] {
-    const out: number[] = [];
-    for (let i = 0; i < count; i += strideClamped) out.push(i);
-    return out;
   }
 
   function vertexKey(sweepIdx: number, ia: number, ir: number): number {
@@ -113,8 +133,7 @@ export function buildGlobeRadarVolumeMesh(
 
   function appendSweepSurface(layout: SweepLayout): void {
     if (layout.azimuthBins < 2 || layout.radialBins < 2) return;
-    const azList = decimatedIndices(layout.azimuthBins);
-    const rgList = decimatedIndices(layout.radialBins);
+    const { azList, rgList } = layout;
     const nAz = azList.length;
     const nR = rgList.length;
     if (nAz < 2 || nR < 2) return;
@@ -146,8 +165,7 @@ export function buildGlobeRadarVolumeMesh(
   function appendInterSweepWalls(lower: SweepLayout, upper: SweepLayout): void {
     if (lower.azimuthBins !== upper.azimuthBins || lower.radialBins !== upper.radialBins) return;
     if (lower.azimuthBins < 2 || lower.radialBins < 2) return;
-    const azList = decimatedIndices(lower.azimuthBins);
-    const rgList = decimatedIndices(lower.radialBins);
+    const { azList, rgList } = lower;
     const nAz = azList.length;
     const nR = rgList.length;
     if (nAz < 2 || nR < 2) return;
@@ -193,6 +211,17 @@ export function buildGlobeRadarVolumeMesh(
     for (let s = 0; s < sorted.length - 1; s++) {
       appendInterSweepWalls(sorted[s], sorted[s + 1]);
     }
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.assert(
+      vertCursor <= estimatedVerts,
+      `[globeRadarMesh] vertCursor ${vertCursor} exceeded estimatedVerts ${estimatedVerts}`
+    );
+    console.assert(
+      idxCursor <= estimatedTris * 3,
+      `[globeRadarMesh] idxCursor ${idxCursor} exceeded index capacity ${estimatedTris * 3}`
+    );
   }
 
   if (idxCursor === 0) return null;
