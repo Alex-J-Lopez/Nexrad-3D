@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getS3, GetObjectCommand, S3_BUCKET } from "@/lib/storage";
 
+export const runtime = "nodejs";
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ key: string[] }> }

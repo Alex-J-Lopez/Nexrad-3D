@@ -3,6 +3,7 @@ import { REDIS_URL } from "@/lib/env";
 import type { StreamEventPayload } from "@nexrad-3d/contracts";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const encoder = new TextEncoder();
@@ -10,8 +11,11 @@ export async function GET(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       const subscriber = new Redis(REDIS_URL);
+      let cleaned = false;
 
       const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
         clearInterval(heartbeat);
         subscriber.unsubscribe("radar:events").catch(() => {});
         subscriber.quit().catch(() => {});
@@ -25,6 +29,15 @@ export async function GET(request: Request) {
         }
       }, 20_000);
 
+      // Register abort listener BEFORE the async subscribe call so cleanup
+      // is always reachable even if subscribe() throws.
+      request.signal.addEventListener("abort", () => {
+        cleanup();
+        try {
+          controller.close();
+        } catch {}
+      });
+
       controller.enqueue(encoder.encode(": connected\n\n"));
 
       subscriber.on("message", (_channel: string, message: string) => {
@@ -34,22 +47,22 @@ export async function GET(request: Request) {
             encoder.encode(`event: ${event.eventType}\ndata: ${JSON.stringify(event.data)}\n\n`)
           );
         } catch {
-          controller.enqueue(
-            encoder.encode(
-              `event: volume.error\ndata: ${JSON.stringify({ reason: "Invalid event payload" })}\n\n`
-            )
-          );
+          try {
+            controller.enqueue(
+              encoder.encode(
+                `event: volume.error\ndata: ${JSON.stringify({ reason: "Invalid event payload" })}\n\n`
+              )
+            );
+          } catch {}
         }
       });
 
-      await subscriber.subscribe("radar:events");
-
-      request.signal.addEventListener("abort", () => {
+      try {
+        await subscriber.subscribe("radar:events");
+      } catch (err) {
         cleanup();
-        try {
-          controller.close();
-        } catch {}
-      });
+        controller.error(err);
+      }
     },
   });
 
