@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes("timed out") ? 503 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (message.includes("timed out")) {
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
+    console.error("[api] route error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

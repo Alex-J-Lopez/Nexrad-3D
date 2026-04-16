@@ -45,17 +45,22 @@ export async function GET(request: NextRequest) {
 
     const items = products.map((product, i) => {
       const json = values[i];
-      return {
-        product,
-        volume: json ? (JSON.parse(json) as RadarVolumeMeta) : null,
-      };
+      if (!json) return { product, volume: null };
+      try {
+        return { product, volume: JSON.parse(json) as RadarVolumeMeta };
+      } catch {
+        return { product, volume: null };
+      }
     });
 
     const response: GetLatestVolumesBatchResponse = { siteId, items };
     return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes("timed out") ? 503 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (message.includes("timed out")) {
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
+    console.error("[api] route error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

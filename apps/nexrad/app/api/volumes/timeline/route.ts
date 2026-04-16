@@ -50,9 +50,14 @@ export async function GET(request: NextRequest) {
       "Redis timeline metadata lookup"
     );
 
-    const metas = metaValues
-      .filter((v): v is string => typeof v === "string")
-      .map((v) => JSON.parse(v) as RadarVolumeMeta);
+    const metas = metaValues.flatMap((v) => {
+      if (typeof v !== "string") return [];
+      try {
+        return [JSON.parse(v) as RadarVolumeMeta];
+      } catch {
+        return [];
+      }
+    });
 
     const frames: TimelineFrame[] = metas.map((m) => ({
       volumeId: m.volumeId,
@@ -72,7 +77,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes("timed out") ? 503 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (message.includes("timed out")) {
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
+    console.error("[api] route error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

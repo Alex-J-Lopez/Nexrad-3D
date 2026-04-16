@@ -11,6 +11,9 @@ export async function GET(
   if (!volumeId?.trim()) {
     return NextResponse.json({ error: "Missing volumeId" }, { status: 400 });
   }
+  if (volumeId.length > 128) {
+    return NextResponse.json({ error: "Invalid volumeId" }, { status: 400 });
+  }
 
   try {
     const redis = getRedis();
@@ -27,10 +30,15 @@ export async function GET(
     const response: GetLatestVolumeResponse = {
       volume: JSON.parse(json) as RadarVolumeMeta,
     };
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: { "Cache-Control": "public, max-age=300, s-maxage=600" },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes("timed out") ? 503 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (message.includes("timed out")) {
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
+    console.error("[api] route error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
