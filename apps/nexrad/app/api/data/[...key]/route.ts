@@ -33,8 +33,8 @@ export async function GET(
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes("NoSuchKey") || message.includes("NotFound")) {
+    const errName = err instanceof Error ? err.name : "";
+    if (errName === "NoSuchKey" || errName === "NotFound") {
       return NextResponse.json({ error: "Artifact not found" }, { status: 404 });
     }
     console.error("[api/data] error:", err);
