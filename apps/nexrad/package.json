@@ -16,7 +16,7 @@
     "@nexrad-3d/contracts": "*",
     "cesium": "^1.140.0",
     "ioredis": "^5.4.1",
-    "next": "^15.5.15",
+    "next": "^15.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.160.0"
