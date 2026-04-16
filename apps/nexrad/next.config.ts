@@ -15,6 +15,7 @@ const cesiumSource = path.resolve(
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingRoot: path.join(__dirname, "../../"),
   experimental: {
     serverActions: { bodySizeLimit: "4mb" },
   },
@@ -26,10 +27,10 @@ const nextConfig: NextConfig = {
       config.plugins.push(
         new CopyWebpackPlugin({
           patterns: [
-            { from: path.join(cesiumSource, "Workers"), to: "../static/cesium/Workers" },
-            { from: path.join(cesiumSource, "Assets"), to: "../static/cesium/Assets" },
-            { from: path.join(cesiumSource, "Widgets"), to: "../static/cesium/Widgets" },
-            { from: path.join(cesiumSource, "ThirdParty"), to: "../static/cesium/ThirdParty" },
+            { from: path.join(cesiumSource, "Workers"), to: "static/cesium/Workers" },
+            { from: path.join(cesiumSource, "Assets"), to: "static/cesium/Assets" },
+            { from: path.join(cesiumSource, "Widgets"), to: "static/cesium/Widgets" },
+            { from: path.join(cesiumSource, "ThirdParty"), to: "static/cesium/ThirdParty" },
           ],
         })
       );
