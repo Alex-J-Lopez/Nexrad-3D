@@ -1,5 +1,7 @@
 import "server-only";
 
+import { DEFAULT_RADAR_SITES_CSV, MIDWEST_RADAR_SITES } from "@nexrad-3d/contracts";
+
 function env(key: string, fallback: string): string {
   return process.env[key]?.trim() || fallback;
 }
@@ -22,16 +24,23 @@ export const S3_REGION = env("S3_REGION", "us-east-1");
 
 export const POLL_INTERVAL_SECONDS = envInt("POLL_INTERVAL_SECONDS", 30);
 
-export const RADAR_SITES = env("RADAR_SITES", "KMKX")
+export const RADAR_SITES = env("RADAR_SITES", DEFAULT_RADAR_SITES_CSV)
   .split(",")
   .map((s) => s.trim().toUpperCase())
   .filter(Boolean);
 
+/** Catalog locations for site picker / map pins / status API; RADAR_SITES entries not listed fall back to generic labels. */
 export const KNOWN_SITES: Record<
   string,
   { name: string; latitude: number; longitude: number; elevationMeters: number }
-> = {
-  KMKX: { name: "Milwaukee, WI", latitude: 42.9681, longitude: -87.9275, elevationMeters: 203 },
-  KTLX: { name: "Oklahoma City, OK", latitude: 35.3331, longitude: -97.2775, elevationMeters: 372 },
-  KLOT: { name: "Chicago, IL", latitude: 41.6044, longitude: -88.0844, elevationMeters: 218 },
-};
+> = Object.fromEntries(
+  MIDWEST_RADAR_SITES.map((s) => [
+    s.id,
+    {
+      name: s.name,
+      latitude: s.latitude,
+      longitude: s.longitude,
+      elevationMeters: s.elevationMeters,
+    },
+  ])
+);

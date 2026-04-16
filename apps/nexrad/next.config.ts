@@ -13,16 +13,30 @@ const cesiumSource = path.resolve(
   "../../node_modules/cesium/Build/Cesium"
 );
 
+/** Real @spz-loader/core breaks client bundles (Emscripten + template literals). */
+const spzLoaderStub = path.join(__dirname, "lib/spz-loader-stub.ts");
+
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../../"),
   experimental: {
     serverActions: { bodySizeLimit: "4mb" },
   },
+  turbopack: {
+    resolveAlias: {
+      "@spz-loader/core": spzLoaderStub,
+    },
+  },
   env: {
     NEXT_PUBLIC_CESIUM_BASE_URL: "/_next/static/cesium",
   },
   webpack: (config, { isServer }) => {
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@spz-loader/core": spzLoaderStub,
+    };
+
     if (!isServer) {
       config.plugins.push(
         new CopyWebpackPlugin({

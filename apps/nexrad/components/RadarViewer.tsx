@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { VolumeProduct, type RadarSite, type RadarVolumeMeta } from "@nexrad-3d/contracts";
+import {
+  VolumeProduct,
+  radarSiteForVolume,
+  type RadarSite,
+  type RadarVolumeMeta,
+} from "@nexrad-3d/contracts";
 import {
   ControlPanel,
   type RadarDisplayMode,
@@ -189,6 +194,13 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
     return buildVolumeSweepSubset(activeVolume, loadedVolumeData.data, keep);
   }, [activeVolume, loadedVolumeData, visibleLowestTiltCount]);
 
+  /** Prefer Level-II Volume-block antenna coords over catalog (KNOWN_SITES) for drawing. */
+  const volumeMetaForPlacement = renderedVolume?.metadata ?? activeVolume;
+  const siteForRendering = useMemo(
+    () => radarSiteForVolume(selectedSite, volumeMetaForPlacement),
+    [selectedSite, volumeMetaForPlacement]
+  );
+
   const statusText = useMemo(() => {
     if (renderError) {
       return renderError;
@@ -290,14 +302,17 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
               <LocalView
                 data={renderedVolume?.data ?? null}
                 metadata={renderedVolume?.metadata ?? null}
-                site={selectedSite ?? null}
+                site={siteForRendering}
                 thresholdDbz={thresholdDbz}
                 onThresholdChange={setThresholdDbz}
                 showThresholdControls
               />
             ) : (
               <GlobeView
-                site={selectedSite ?? null}
+                site={siteForRendering}
+                mapSites={sites}
+                selectedSiteId={selectedSiteId}
+                onSiteSelect={setSelectedSiteId}
                 metadata={renderedVolume?.metadata ?? null}
                 data={renderedVolume?.data ?? null}
                 thresholdDbz={thresholdDbz}

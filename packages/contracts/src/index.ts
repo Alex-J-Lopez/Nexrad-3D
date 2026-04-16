@@ -87,6 +87,9 @@ export interface RadarSite {
   lastVolumeAt?: number; // Unix timestamp ms
 }
 
+export type { MidwestRadarSiteDefinition } from "./midwestSites.js";
+export { DEFAULT_RADAR_SITES_CSV, MIDWEST_RADAR_SITES } from "./midwestSites.js";
+
 export interface SweepInfo {
   sweepIndex: number;
   elevationAngleDegrees: number;
@@ -109,6 +112,42 @@ export interface RadarVolumeMeta {
   noDataValue: number;
   storageKey: string; // Path/key in object storage
   decodeMode?: "decoded" | "bootstrap-byte-map";
+  /**
+   * Antenna position from the Level-II Volume data block (actual scan reference).
+   * When set, prefer these over catalog {@link RadarSite} coordinates for globe/local placement.
+   */
+  radarLatitudeDegrees?: number;
+  radarLongitudeDegrees?: number;
+  /** Feedhorn height AMSL from the Volume block (meters per NEXRAD ICD / nexrad-level-2-data). */
+  radarAntennaHeightMeters?: number;
+}
+
+/**
+ * Merge catalog site info with volume-reported antenna coordinates when the ingest
+ * pipeline stored them on {@link RadarVolumeMeta}.
+ */
+export function radarSiteForVolume(
+  site: RadarSite | null | undefined,
+  metadata: RadarVolumeMeta | null | undefined
+): RadarSite | null {
+  if (!site) {
+    return null;
+  }
+  if (!metadata) {
+    return site;
+  }
+  const lat = metadata.radarLatitudeDegrees;
+  const lon = metadata.radarLongitudeDegrees;
+  if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return site;
+  }
+  const h = metadata.radarAntennaHeightMeters;
+  return {
+    ...site,
+    latitude: lat,
+    longitude: lon,
+    elevationMeters: h != null && Number.isFinite(h) ? h : site.elevationMeters,
+  };
 }
 
 export interface TimelineFrame {

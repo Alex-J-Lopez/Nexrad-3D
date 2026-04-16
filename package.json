@@ -9,8 +9,9 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @nexrad-3d/nexrad",
+    "dev": "concurrently -n nexrad,ingest -c cyan,magenta \"npm run dev -w @nexrad-3d/nexrad\" \"npm run dev -w @nexrad-3d/ingest-worker\"",
     "dev:nexrad": "npm run dev -w @nexrad-3d/nexrad",
+    "dev:ingest": "npm run dev -w @nexrad-3d/ingest-worker",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

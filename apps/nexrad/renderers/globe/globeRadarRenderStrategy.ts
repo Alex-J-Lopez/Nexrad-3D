@@ -1,3 +1,4 @@
+import "@/lib/cesiumBootstrap";
 import * as Cesium from "cesium";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
 import { nwsColor, projectBeamSample } from "../shared/radarGeometry";
@@ -151,7 +152,8 @@ export class MeshGlobeRadarStrategy implements GlobeRadarRenderStrategy {
           translucent: true,
           closed: false,
         }),
-        asynchronous: true,
+        // Geometry is fully specified; sync path avoids Cesium worker URL requirements.
+        asynchronous: false,
       })
     );
 
@@ -203,7 +205,7 @@ export class MeshGlobeRadarStrategy implements GlobeRadarRenderStrategy {
           translucent: true,
           closed: false,
         }),
-        asynchronous: true,
+        asynchronous: false,
       })
     );
 
@@ -323,7 +325,7 @@ export class PointGlobeRadarStrategy implements GlobeRadarRenderStrategy {
           translucent: true,
           closed: false,
         }),
-        asynchronous: true,
+        asynchronous: false,
       })
     );
 

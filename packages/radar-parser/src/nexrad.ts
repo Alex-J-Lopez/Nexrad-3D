@@ -4,7 +4,7 @@ import {
   type HighResData,
   type MessageHeader,
 } from "nexrad-level-2-data";
-import type { ParserLoadContext, RadarReader } from "./index";
+import type { ParserLoadContext, RadarReader } from "./index.js";
 
 const DEFAULT_AZIMUTH_BINS = 360;
 const DEFAULT_RADIAL_BINS = 200;
@@ -82,26 +82,42 @@ function validMomentSample(value: number | null | undefined): value is number {
 }
 
 function resolveMomentBlocks(radar: Level2Radar, product: VolumeProduct): HighResData[] {
+  let raw: unknown;
   switch (product) {
     case VolumeProduct.REFLECTIVITY:
-      return normalizeArray(radar.getHighresReflectivity());
+      raw = radar.getHighresReflectivity();
+      break;
     case VolumeProduct.VELOCITY:
-      return normalizeArray(radar.getHighresVelocity());
+      raw = radar.getHighresVelocity();
+      break;
     case VolumeProduct.SPECTRUM_WIDTH:
-      return normalizeArray(radar.getHighresSpectrum());
+      raw = radar.getHighresSpectrum();
+      break;
     case VolumeProduct.DIFFERENTIAL_REFLECTIVITY:
-      return normalizeArray(radar.getHighresDiffReflectivity());
+      raw = radar.getHighresDiffReflectivity();
+      break;
     case VolumeProduct.CORRELATION_COEFFICIENT:
-      return normalizeArray(radar.getHighresCorrelationCoefficient());
+      raw = radar.getHighresCorrelationCoefficient();
+      break;
     case VolumeProduct.DIFFERENTIAL_PHASE:
-      return normalizeArray(radar.getHighresDiffPhase());
+      raw = radar.getHighresDiffPhase();
+      break;
     default:
       throw new Error(`Unsupported decoded product: ${product}`);
   }
+
+  return normalizeArray(raw as HighResData | HighResData[] | undefined);
 }
 
-function pickGateSizeMeters(momentBlocks: HighResData[]): number {
+function isHighResData(block: unknown): block is HighResData {
+  return block != null && typeof block === "object" && "moment_data" in (block as object);
+}
+
+function pickGateSizeMeters(momentBlocks: (HighResData | undefined)[]): number {
   for (const block of momentBlocks) {
+    if (!isHighResData(block)) {
+      continue;
+    }
     if (typeof block.gate_size === "number" && block.gate_size > 0) {
       return block.gate_size * 1000;
     }
@@ -110,10 +126,13 @@ function pickGateSizeMeters(momentBlocks: HighResData[]): number {
   return DEFAULT_BIN_SIZE_METERS;
 }
 
-function pickFirstGateMeters(momentBlocks: HighResData[]): number {
+function pickFirstGateMeters(momentBlocks: (HighResData | undefined)[]): number {
   let firstGateMeters = Number.POSITIVE_INFINITY;
 
   for (const block of momentBlocks) {
+    if (!isHighResData(block)) {
+      continue;
+    }
     if (typeof block.first_gate === "number" && Number.isFinite(block.first_gate)) {
       firstGateMeters = Math.min(firstGateMeters, block.first_gate * 1000);
     }
@@ -129,6 +148,36 @@ function readHeader(radar: Level2Radar): MessageHeader | null {
   } catch {
     return null;
   }
+}
+
+/** Level-II Volume block: antenna lat/lon and feedhorn height (see NEXRAD Message 31 VOL). */
+function extractRadarGeoreference(radar: Level2Radar):
+  | {
+      radarLatitudeDegrees: number;
+      radarLongitudeDegrees: number;
+      radarAntennaHeightMeters?: number;
+    }
+  | undefined {
+  const header = readHeader(radar);
+  const vol = header?.volume;
+  if (!vol || typeof vol.latitude !== "number" || typeof vol.longitude !== "number") {
+    return undefined;
+  }
+  if (!Number.isFinite(vol.latitude) || !Number.isFinite(vol.longitude)) {
+    return undefined;
+  }
+  const out: {
+    radarLatitudeDegrees: number;
+    radarLongitudeDegrees: number;
+    radarAntennaHeightMeters?: number;
+  } = {
+    radarLatitudeDegrees: vol.latitude,
+    radarLongitudeDegrees: vol.longitude,
+  };
+  if (typeof vol.feedhorn_height === "number" && Number.isFinite(vol.feedhorn_height)) {
+    out.radarAntennaHeightMeters = vol.feedhorn_height;
+  }
+  return out;
 }
 
 function fillMissingAzimuthRows(
@@ -271,9 +320,20 @@ function loadDecodedVolume(
   let radialBinSizeMeters = DEFAULT_BIN_SIZE_METERS;
   let minRangeMeters = Number.POSITIVE_INFINITY;
   let maxRangeMeters = 0;
+  let radarGeoref:
+    | {
+        radarLatitudeDegrees: number;
+        radarLongitudeDegrees: number;
+        radarAntennaHeightMeters?: number;
+      }
+    | undefined;
 
   for (const elevation of elevations) {
     radar.setElevation(elevation);
+
+    if (!radarGeoref) {
+      radarGeoref = extractRadarGeoreference(radar);
+    }
 
     let scanCount = 0;
     try {
@@ -300,6 +360,9 @@ function loadDecodedVolume(
     const sweepFirstGateMeters = pickFirstGateMeters(activeMoments);
     const radialBins =
       activeMoments.reduce((maxGateCount, block) => {
+        if (!isHighResData(block) || !Array.isArray(block.moment_data)) {
+          return maxGateCount;
+        }
         const gateCount =
           typeof block.gate_count === "number"
             ? Math.max(0, Math.trunc(block.gate_count))
@@ -455,6 +518,7 @@ function loadDecodedVolume(
       noDataValue: NO_DATA_VALUE,
       storageKey: "",
       decodeMode: "decoded",
+      ...(radarGeoref ?? {}),
     },
   };
 }

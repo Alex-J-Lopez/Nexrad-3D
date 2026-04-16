@@ -19,9 +19,19 @@ declare module "nexrad-level-2-data" {
     nyquist_velocity?: number;
   }
 
+  export interface VolumeDataBlock {
+    block_type?: string;
+    name?: string;
+    latitude?: number;
+    longitude?: number;
+    feedhorn_height?: number;
+  }
+
   export interface MessageHeader {
     elevation_angle: number;
     radial?: RadialData;
+    /** Present on radial messages that include a VOL block (antenna lat/lon / height). */
+    volume?: VolumeDataBlock;
   }
 
   export interface Level2Header {

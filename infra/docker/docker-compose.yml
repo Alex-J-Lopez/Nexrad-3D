@@ -45,8 +45,29 @@ services:
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: radar-data
       S3_REGION: us-east-1
-      RADAR_SITES: KMKX
+      RADAR_SITES: KABR,KAPX,KARX,KBIS,KCLE,KDDC,KDMX,KDTX,KDVN,KEAX,KFSD,KGLD,KGRB,KGRR,KICT,KILN,KILX,KIND,KIWX,KLOT,KLSX,KLVX,KMKX,KMPX,KMQT,KMVX,KOAX,KSGF,KUEX
       POLL_INTERVAL_SECONDS: "30"
+    depends_on:
+      - redis
+      - minio
+      - minio-init
+    restart: unless-stopped
+
+  # Polls NOAA NEXRAD Level II, decodes volumes, writes Redis + MinIO (required for data in the UI).
+  ingest-worker:
+    build:
+      context: ../..
+      dockerfile: services/ingest-worker/Dockerfile
+    container_name: nexrad-3d-ingest
+    environment:
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: radar-data
+      RADAR_SITES: KABR,KAPX,KARX,KBIS,KCLE,KDDC,KDMX,KDTX,KDVN,KEAX,KFSD,KGLD,KGRB,KGRR,KICT,KILN,KILX,KIND,KIWX,KLOT,KLSX,KLVX,KMKX,KMPX,KMQT,KMVX,KOAX,KSGF,KUEX
+      POLL_INTERVAL_SECONDS: "30"
+      OBJECT_STORAGE_ENABLED: "true"
     depends_on:
       - redis
       - minio

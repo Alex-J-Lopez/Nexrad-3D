@@ -1,3 +1,4 @@
+import "@/lib/cesiumBootstrap";
 import * as Cesium from "cesium";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
 import {
