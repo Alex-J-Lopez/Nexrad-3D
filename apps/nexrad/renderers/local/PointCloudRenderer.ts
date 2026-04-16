@@ -154,24 +154,25 @@ export class PointCloudRenderer {
     }
 
     if (!this.points) {
-      this.initPointCloud(positions.length);
+      this.initPointCloud(pointCount);
     }
 
     const geo = this.points!.geometry;
-    const posAttr = geo.getAttribute("position") as THREE.BufferAttribute;
-    const colAttr = geo.getAttribute("color") as THREE.BufferAttribute;
+    let posAttr = geo.getAttribute("position") as THREE.BufferAttribute;
+    let colAttr = geo.getAttribute("color") as THREE.BufferAttribute;
 
     if (positions.length > posAttr.array.length) {
-      this.initPointCloud(positions.length);
+      this.initPointCloud(pointCount);
+      // Re-acquire refs from the newly created geometry
+      posAttr = this.points!.geometry.getAttribute("position") as THREE.BufferAttribute;
+      colAttr = this.points!.geometry.getAttribute("color") as THREE.BufferAttribute;
     }
 
-    const posArr = posAttr.array as Float32Array;
-    const colArr = colAttr.array as Float32Array;
-    posArr.set(positions);
-    colArr.set(colors);
+    (posAttr.array as Float32Array).set(positions);
     posAttr.needsUpdate = true;
+    (colAttr.array as Float32Array).set(colors);
     colAttr.needsUpdate = true;
-    geo.setDrawRange(0, pointCount);
+    this.points!.geometry.setDrawRange(0, pointCount);
     this.points!.visible = true;
     return pointCount;
   }
