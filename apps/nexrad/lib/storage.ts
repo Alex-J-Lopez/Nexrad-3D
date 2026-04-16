@@ -3,7 +3,7 @@ import { S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION, S3_BUCKET } from 
 
 const g = globalThis as typeof globalThis & { _nexradS3?: S3Client };
 
-const isCustomEndpoint = Boolean(S3_ENDPOINT);
+const isCustomEndpoint = Boolean(process.env.S3_ENDPOINT?.trim());
 
 export function getS3(): S3Client {
   if (!g._nexradS3) {
