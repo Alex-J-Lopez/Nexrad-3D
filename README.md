@@ -1,4 +1,6 @@
 # Nexrad 3D
+<img width="1800" height="999" alt="image" src="https://github.com/user-attachments/assets/7e11798a-1000-4972-a574-803b15adb7dc" />
+
 
 Nexrad 3D is a web-native radar platform inspired by OpenStorm. It provides a modern 3D globe experience, near-real-time radar updates, and radar-source switching without Unreal Engine runtime dependencies.
 
