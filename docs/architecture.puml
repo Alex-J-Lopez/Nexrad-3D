@@ -1,0 +1,64 @@
+@startuml Nexrad3D Architecture
+!pragma layout smetana
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontSize 11
+skinparam rectangle {
+    BackgroundColor<<external>> #FFE5E5
+    BackgroundColor<<service>> #B3D9FF
+    BackgroundColor<<infra>> #E5D9FF
+    BackgroundColor<<pkg>> #FFF3E0
+    BackgroundColor<<app>> #D9E5B3
+    BackgroundColor<<frontend>> #E8F5E9
+    BackgroundColor<<browser>> #F5F5F5
+}
+
+rectangle "Upstream Radar\nManifests" as Upstream <<external>>
+
+rectangle "Ingest Worker\n@nexrad-3d/ingest-worker" as IngestWorker <<service>>
+
+rectangle "Redis" as Redis <<infra>>
+rectangle "S3 Storage" as S3 <<infra>>
+
+rectangle "Contracts" as Contracts <<pkg>>
+rectangle "Radar Parser" as Parser <<pkg>>
+rectangle "Radar Colors" as Colors <<pkg>>
+
+rectangle "API Backend" as API <<app>>
+
+rectangle "Next.js Server" as NextServer <<frontend>>
+rectangle "React Components" as Components <<frontend>>
+rectangle "Globe Renderer" as GlobeRenderer <<frontend>>
+rectangle "Local Renderer" as LocalRenderer <<frontend>>
+rectangle "Web Workers" as Workers <<frontend>>
+rectangle "Hooks" as Hooks <<frontend>>
+
+rectangle "Web Browser" as Browser <<browser>>
+
+Upstream --> IngestWorker
+IngestWorker --> Contracts
+IngestWorker --> Parser
+IngestWorker --> Redis
+IngestWorker --> S3
+
+API --> Contracts
+API --> Redis
+API --> S3
+
+NextServer --> Contracts
+NextServer --> Browser
+
+Components --> Colors
+Components --> GlobeRenderer
+Components --> LocalRenderer
+Components --> Hooks
+Components --> Workers
+
+Hooks --> API
+Hooks --> Redis
+
+Workers --> Parser
+
+Browser --> NextServer
+
+@enduml

@@ -1,0 +1,26 @@
+{
+  "name": "@nexrad-3d/radar-parser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@nexrad-3d/contracts": "*",
+    "nexrad-level-2-data": "^2.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
