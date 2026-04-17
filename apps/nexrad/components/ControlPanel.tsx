@@ -1,7 +1,6 @@
 "use client";
 
 import { VolumeProduct, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
-type GlobeRadarRenderMode = "volumetric" | "points" | "mesh";
 
 export type RadarDisplayMode = "globe" | "local";
 
@@ -15,10 +14,6 @@ interface ControlPanelProps {
   liveFollow: boolean;
   displayMode: RadarDisplayMode;
   onDisplayModeChange: (mode: RadarDisplayMode) => void;
-  globeRenderMode: GlobeRadarRenderMode;
-  onGlobeRenderModeChange: (mode: GlobeRadarRenderMode) => void;
-  globeFullResolution: boolean;
-  onGlobeFullResolutionChange: (enabled: boolean) => void;
   thresholdDbz: number;
   onThresholdChange: (value: number) => void;
   timeline: TimelineFrame[];
@@ -53,10 +48,6 @@ export function ControlPanel(props: ControlPanelProps) {
     liveFollow,
     displayMode,
     onDisplayModeChange,
-    globeRenderMode,
-    onGlobeRenderModeChange,
-    globeFullResolution,
-    onGlobeFullResolutionChange,
     thresholdDbz,
     onThresholdChange,
     timeline,
@@ -146,37 +137,6 @@ export function ControlPanel(props: ControlPanelProps) {
             <option value="local">Local 3D</option>
           </select>
         </label>
-
-        {displayMode === "globe" ? (
-          <label className="control-field">
-            <span className="control-label">Globe style</span>
-            <select
-              className="control-input"
-              value={globeRenderMode}
-              onChange={(event) => {
-                onGlobeRenderModeChange(event.target.value as GlobeRadarRenderMode);
-              }}
-            >
-              <option value="mesh">Mesh</option>
-              <option value="points">Point cloud</option>
-              <option value="volumetric">Volumetric cloud</option>
-            </select>
-          </label>
-        ) : null}
-
-        {displayMode === "globe" ? (
-          <label className="toggle-field" htmlFor="globe-full-resolution">
-            <input
-              id="globe-full-resolution"
-              type="checkbox"
-              checked={globeFullResolution}
-              onChange={(event) => {
-                onGlobeFullResolutionChange(event.target.checked);
-              }}
-            />
-            <span>Full resolution (globe)</span>
-          </label>
-        ) : null}
 
         {displayMode === "globe" ? (
           <label className="control-field">

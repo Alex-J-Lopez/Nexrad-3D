@@ -13,9 +13,6 @@ interface GlobeViewProps {
   metadata: RadarVolumeMeta | null;
   data: Float32Array | null;
   thresholdDbz: number;
-  renderMode: string;
-  options?: any;
-  onRenderModeChange: (mode: string) => void;
 }
 
 export function GlobeView({
@@ -26,9 +23,6 @@ export function GlobeView({
   metadata,
   data,
   thresholdDbz,
-  renderMode,
-  options,
-  onRenderModeChange,
 }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);

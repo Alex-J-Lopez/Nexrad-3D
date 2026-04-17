@@ -17,7 +17,6 @@ import { StatusStrip } from "./StatusStrip";
 import { useRadarData } from "@/hooks/useRadarData";
 import { loadVolumeArtifact } from "@/renderers/shared/volumeLoader";
 import { buildVolumeSweepSubset } from "@/renderers/shared/volumeSweepSubset";
-type GlobeRadarRenderMode = "volumetric" | "points" | "mesh";
 
 // Dynamic imports with ssr: false for WebGL components
 const GlobeView = dynamic(() => import("./GlobeView").then((m) => ({ default: m.GlobeView })), {
@@ -50,8 +49,6 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
     source: "artifact" | "synthetic";
   } | null>(null);
   const [thresholdDbz, setThresholdDbz] = useState(15);
-  const [globeRenderMode, setGlobeRenderMode] = useState<GlobeRadarRenderMode>("mesh");
-  const [globeFullResolution, setGlobeFullResolution] = useState(false);
   const [visibleLowestTiltCount, setVisibleLowestTiltCount] =
     useState<VisibleLowestTiltCount>("all");
 
@@ -256,10 +253,6 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
             liveFollow={liveFollow}
             displayMode={displayMode}
             onDisplayModeChange={setDisplayMode}
-            globeRenderMode={globeRenderMode}
-            onGlobeRenderModeChange={setGlobeRenderMode}
-            globeFullResolution={globeFullResolution}
-            onGlobeFullResolutionChange={setGlobeFullResolution}
             thresholdDbz={thresholdDbz}
             onThresholdChange={setThresholdDbz}
             timeline={timeline}
@@ -316,9 +309,6 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
                 metadata={renderedVolume?.metadata ?? null}
                 data={renderedVolume?.data ?? null}
                 thresholdDbz={thresholdDbz}
-                renderMode={globeRenderMode}
-                options={{ fullResolution: globeFullResolution }}
-                onRenderModeChange={setGlobeRenderMode}
               />
             )}
           </div>
