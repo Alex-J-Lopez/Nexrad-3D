@@ -17,7 +17,7 @@ import { StatusStrip } from "./StatusStrip";
 import { useRadarData } from "@/hooks/useRadarData";
 import { loadVolumeArtifact } from "@/renderers/shared/volumeLoader";
 import { buildVolumeSweepSubset } from "@/renderers/shared/volumeSweepSubset";
-import type { GlobeRadarRenderMode } from "@/renderers/globe/globeRadarRenderStrategy";
+type GlobeRadarRenderMode = "volumetric" | "points" | "mesh";
 
 // Dynamic imports with ssr: false for WebGL components
 const GlobeView = dynamic(() => import("./GlobeView").then((m) => ({ default: m.GlobeView })), {

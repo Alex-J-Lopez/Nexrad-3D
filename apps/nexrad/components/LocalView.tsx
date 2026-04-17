@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
-import { PointCloudRenderer } from "@/renderers/local/PointCloudRenderer";
-import { useWorker } from "@/hooks/useWorker";
+import { VolumeRayMarchRenderer } from "@/renderers/local/VolumeRayMarchRenderer";
 
 // NWS colorbar gradient stops [fraction 0–1, hex color]
 const COLORBAR_STOPS: Array<[number, string]> = [
@@ -43,14 +42,6 @@ interface LocalViewProps {
   showThresholdControls?: boolean;
 }
 
-interface PointCloudWorkerResult {
-  type: "result" | "error";
-  positions?: Float32Array;
-  colors?: Float32Array;
-  pointCount?: number;
-  message?: string;
-}
-
 export function LocalView({
   data,
   metadata,
@@ -61,37 +52,13 @@ export function LocalView({
 }: LocalViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const colorbarRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<PointCloudRenderer | null>(null);
+  const rendererRef = useRef<VolumeRayMarchRenderer | null>(null);
   const [spinning, setSpinning] = useState(false);
-  const [pointCount, setPointCount] = useState(0);
-
-  // Memoize worker factory
-  const pointCloudWorkerFactory = useMemo(
-    () => () => new Worker(new URL("../workers/pointCloudWorker", import.meta.url)),
-    []
-  );
-
-  const handlePointCloudResult = useCallback((result: PointCloudWorkerResult) => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-
-    if (result.type === "result" && result.positions && result.colors && result.pointCount !== undefined) {
-      const count = renderer.updateFromWorkerResult(result.positions, result.colors, result.pointCount);
-      setPointCount(count);
-    } else if (result.type === "error") {
-      console.error("[LocalView] point cloud worker error:", result.message);
-      setPointCount(0);
-    }
-  }, []);
-
-  const { postMessage: postPointCloudMessage } = useWorker<unknown, PointCloudWorkerResult>(
-    pointCloudWorkerFactory,
-    handlePointCloudResult
-  );
+  const [voxelCount, setVoxelCount] = useState(0);
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const renderer = new PointCloudRenderer(canvasRef.current);
+    const renderer = new VolumeRayMarchRenderer(canvasRef.current);
     rendererRef.current = renderer;
     return () => {
       renderer.dispose();
@@ -118,17 +85,14 @@ export function LocalView({
 
   useEffect(() => {
     if (!data || !metadata) {
-      setPointCount(0);
+      rendererRef.current?.clearVolume();
+      setVoxelCount(0);
       return;
     }
 
-    // Post to worker (transfer data)
-    const dataCopy = data.slice();
-    postPointCloudMessage(
-      { type: "build", data: dataCopy, metadata, thresholdDbz },
-      [dataCopy.buffer]
-    );
-  }, [data, metadata, thresholdDbz, postPointCloudMessage]);
+    const count = rendererRef.current?.updateVolume(data, metadata, thresholdDbz) ?? 0;
+    setVoxelCount(count);
+  }, [data, metadata, thresholdDbz]);
 
   const handleToggleSpin = useCallback(() => {
     if (!rendererRef.current) return;
@@ -155,8 +119,8 @@ export function LocalView({
           {siteName ? <span className="rv-site-name">{siteName}</span> : null}
         </div>
         <div className="rv-hint">
-          {pointCount > 0
-            ? `${pointCount.toLocaleString()} pts · drag rotate · scroll zoom`
+          {voxelCount > 0
+            ? `${voxelCount.toLocaleString()} voxels · drag rotate · scroll zoom`
             : "drag to rotate · scroll to zoom"}
         </div>
       </div>

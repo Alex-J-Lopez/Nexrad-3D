@@ -19,6 +19,7 @@
     "infra:down": "docker compose -f infra/docker/docker-compose.yml down"
   },
   "devDependencies": {
+    "@types/maplibre-gl": "^1.13.2",
     "@types/node": "^22.10.2",
     "concurrently": "^9.1.2",
     "prettier": "^3.4.2",
@@ -26,5 +27,8 @@
     "react-dom": "^19.2.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.23.0"
   }
 }

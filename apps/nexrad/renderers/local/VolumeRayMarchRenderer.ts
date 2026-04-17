@@ -1,18 +1,18 @@
 import * as THREE from "three";
 import type { RadarVolumeMeta } from "@nexrad-3d/contracts";
-import { buildPointArrays } from "./pointCloudArrays";
+import { RadarVolumeNode } from "../shared/radarVolumeNode";
 
 const RANGE_RING_RADII_KM = [50, 100, 150];
 const RING_SEGMENTS = 128;
-const POINT_SIZE = 1.8;
 const BACKGROUND_COLOR = 0x070a12;
 
-export class PointCloudRenderer {
+export class VolumeRayMarchRenderer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly canvas: HTMLCanvasElement;
-  private points: THREE.Points | null = null;
+  private readonly radarNode: RadarVolumeNode;
+  
   private animFrameId: number | null = null;
   private spherical = { theta: -0.4, phi: 1.1, r: 230 };
   private isDragging = false;
@@ -40,11 +40,13 @@ export class PointCloudRenderer {
     this.renderer.setClearColor(BACKGROUND_COLOR, 1);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 2000);
+    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.001, 50000);
     this.updateCamera();
 
-    this.addGroundDisk();
     this.addRangeRings();
+    
+    this.radarNode = new RadarVolumeNode();
+    this.scene.add(this.radarNode.mesh);
 
     this.boundMouseDown = (e) => {
       this.isDragging = true;
@@ -66,7 +68,7 @@ export class PointCloudRenderer {
       this.isDragging = false;
     };
     this.boundWheel = (e) => {
-      this.spherical.r = Math.max(80, Math.min(500, this.spherical.r + e.deltaY * 0.3));
+      this.spherical.r = Math.max(0.1, Math.min(600, this.spherical.r + e.deltaY * 0.3));
       this.updateCamera();
       e.preventDefault();
     };
@@ -101,8 +103,8 @@ export class PointCloudRenderer {
           e.touches[0].clientY - e.touches[1].clientY
         );
         this.spherical.r = Math.max(
-          80,
-          Math.min(500, this.spherical.r - (d - this.lastTouchDist) * 0.5)
+          0.1,
+          Math.min(600, this.spherical.r - (d - this.lastTouchDist) * 0.5)
         );
         this.lastTouchDist = d;
         this.updateCamera();
@@ -140,41 +142,12 @@ export class PointCloudRenderer {
     this.updateCamera();
   }
 
-  /** Fallback main-thread path: builds point arrays then delegates to updateFromWorkerResult. */
   updateVolume(data: Float32Array, metadata: RadarVolumeMeta, thresholdDbz: number): number {
-    const { positions, colors, pointCount } = buildPointArrays(data, metadata, thresholdDbz);
-    return this.updateFromWorkerResult(positions, colors, pointCount);
+    return this.radarNode.updateVolume(data, metadata, thresholdDbz, this.renderer.capabilities.maxTextureSize);
   }
 
-  /** Accept pre-built typed arrays (e.g. from a worker) and update the GPU buffers in place. */
-  updateFromWorkerResult(positions: Float32Array, colors: Float32Array, pointCount: number): number {
-    if (pointCount === 0) {
-      if (this.points) this.points.visible = false;
-      return 0;
-    }
-
-    if (!this.points) {
-      this.initPointCloud(pointCount);
-    }
-
-    const geo = this.points!.geometry;
-    let posAttr = geo.getAttribute("position") as THREE.BufferAttribute;
-    let colAttr = geo.getAttribute("color") as THREE.BufferAttribute;
-
-    if (positions.length > posAttr.array.length) {
-      this.initPointCloud(pointCount);
-      // Re-acquire refs from the newly created geometry
-      posAttr = this.points!.geometry.getAttribute("position") as THREE.BufferAttribute;
-      colAttr = this.points!.geometry.getAttribute("color") as THREE.BufferAttribute;
-    }
-
-    (posAttr.array as Float32Array).set(positions);
-    posAttr.needsUpdate = true;
-    (colAttr.array as Float32Array).set(colors);
-    colAttr.needsUpdate = true;
-    this.points!.geometry.setDrawRange(0, pointCount);
-    this.points!.visible = true;
-    return pointCount;
+  clearVolume(): void {
+    this.radarNode.clearVolume();
   }
 
   dispose(): void {
@@ -189,40 +162,10 @@ export class PointCloudRenderer {
     this.canvas.removeEventListener("touchstart", this.boundTouchStart);
     this.canvas.removeEventListener("touchmove", this.boundTouchMove);
     this.canvas.removeEventListener("touchend", this.boundTouchEnd);
-    if (this.points) {
-      this.points.geometry.dispose();
-      (this.points.material as THREE.Material).dispose();
-    }
+
+    this.radarNode.dispose();
+    this.scene.remove(this.radarNode.mesh);
     this.renderer.dispose();
-  }
-
-  private initPointCloud(maxCount: number): void {
-    if (this.points) {
-      this.scene.remove(this.points);
-      this.points.geometry.dispose();
-      (this.points.material as THREE.Material).dispose();
-      this.points = null;
-    }
-
-    const geo = new THREE.BufferGeometry();
-    const posAttr = new THREE.BufferAttribute(new Float32Array(maxCount * 3), 3);
-    const colAttr = new THREE.BufferAttribute(new Float32Array(maxCount * 3), 3);
-    posAttr.setUsage(THREE.DynamicDrawUsage);
-    colAttr.setUsage(THREE.DynamicDrawUsage);
-    geo.setAttribute("position", posAttr);
-    geo.setAttribute("color", colAttr);
-    geo.setDrawRange(0, 0);
-
-    const mat = new THREE.PointsMaterial({
-      size: POINT_SIZE,
-      vertexColors: true,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.85,
-    });
-
-    this.points = new THREE.Points(geo, mat);
-    this.scene.add(this.points);
   }
 
   private updateCamera(): void {
@@ -251,20 +194,6 @@ export class PointCloudRenderer {
     }
   }
 
-  private addGroundDisk(): void {
-    const geo = new THREE.CircleGeometry(155, 128);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x1a2035,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.4,
-    });
-    const disk = new THREE.Mesh(geo, mat);
-    disk.rotation.x = -Math.PI / 2;
-    disk.position.y = -0.5;
-    this.scene.add(disk);
-  }
-
   private startRenderLoop(): void {
     const animate = () => {
       this.animFrameId = requestAnimationFrame(animate);
@@ -272,6 +201,9 @@ export class PointCloudRenderer {
         this.spherical.theta += 0.005;
         this.updateCamera();
       }
+
+      this.radarNode.updateTime(performance.now() * 0.001, this.camera.position);
+
       this.renderer.render(this.scene, this.camera);
     };
     animate();

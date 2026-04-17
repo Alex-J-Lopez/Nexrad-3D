@@ -10,7 +10,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="stylesheet" href="/_next/static/cesium/Widgets/widgets.css" />
+        <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" />
       </head>
       <body>{children}</body>
     </html>

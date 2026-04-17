@@ -1,0 +1,60 @@
+    }
+  }
+
+  public clear() {
+    this.radarNode.clearVolume();
+    if (this.map) {
+      this.map.triggerRepaint();
+    }
+  }
+
+  public onAdd(map: maplibregl.Map, gl: WebGLRenderingContext) {
+    this.map = map;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: map.getCanvas(),
+      context: gl,
+      antialias: true,
+    });
+    this.renderer.autoClear = false;
+  }
+
+  public render(gl: WebGLRenderingContext, matrix: maplibregl.CustomRenderMethodInput) {
+    if (!this.renderer || !this.site || !this.radarNode.mesh.visible) {
+      return;
+    }
+
+    const mercatorCoords = maplibregl.MercatorCoordinate.fromLngLat(
+      [this.site.longitude, this.site.latitude],
+      this.site.elevationMeters || 0
+    );
+
+    const mercatorScale = mercatorCoords.meterInMercatorCoordinateUnits();
+    const kmScale = mercatorScale * 1000;
+
+    // Three.js: X=East, Y=Up, Z=South
+    // MapLibre: X=East, Y=South, Z=Up
+    // So we map: X_ml = X_th, Y_ml = Z_th, Z_ml = Y_th
+    const l = new THREE.Matrix4().set(
+      kmScale, 0, 0, mercatorCoords.x,
+      0, 0, kmScale, mercatorCoords.y,
+      0, kmScale, 0, mercatorCoords.z,
+      0, 0, 0, 1
+    );
+
+    // CustomRenderMethodInput has standard method 'defaultProjectionData'
+    const m = new THREE.Matrix4().fromArray(matrix.defaultProjectionData.mainMatrix);
+
+    this.camera.projectionMatrix = m.multiply(l);
+    
+    // Reverse engineer camera position roughly for shader
+    const invertProj = this.camera.projectionMatrix.clone().invert();
+    const camPos = new THREE.Vector3().setFromMatrixPosition(invertProj);
+    this.radarNode.updateTime(performance.now() * 0.001, camPos);
+
+    this.renderer.resetState();
+    this.renderer.render(this.scene, this.camera);
+    if (this.map) {
+      this.map.triggerRepaint();
+    }
+  }
+}

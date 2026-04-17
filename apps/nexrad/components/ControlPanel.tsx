@@ -1,7 +1,7 @@
 "use client";
 
 import { VolumeProduct, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
-import type { GlobeRadarRenderMode } from "@/renderers/globe/globeRadarRenderStrategy";
+type GlobeRadarRenderMode = "volumetric" | "points" | "mesh";
 
 export type RadarDisplayMode = "globe" | "local";
 
@@ -159,6 +159,7 @@ export function ControlPanel(props: ControlPanelProps) {
             >
               <option value="mesh">Mesh</option>
               <option value="points">Point cloud</option>
+              <option value="volumetric">Volumetric cloud</option>
             </select>
           </label>
         ) : null}
