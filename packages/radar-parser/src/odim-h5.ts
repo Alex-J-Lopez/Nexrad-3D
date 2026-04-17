@@ -1,5 +1,5 @@
 import type { VolumeArtifact, VolumeProduct } from "@nexrad-3d/contracts";
-import type { ParserLoadContext, RadarReader } from "./index";
+import type { ParserLoadContext, RadarReader } from "./index.js";
 
 export function isLikelyOdimH5File(filename: string, fileBuffer: ArrayBuffer): boolean {
   const normalized = filename.toLowerCase();

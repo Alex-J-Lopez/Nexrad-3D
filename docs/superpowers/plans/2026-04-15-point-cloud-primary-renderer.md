@@ -12,17 +12,19 @@
 
 ## File Map
 
-| Action | File | Responsibility |
-|---|---|---|
-| **Create** | `apps/web/src/renderers/pointCloudArrays.ts` | Pure function: build positions+colors Float32Arrays from volume data, returns point count |
-| **Create** | `apps/web/src/renderers/pointCloudArrays.test.ts` | Unit tests for the pure array builder |
-| **Create** | `apps/web/src/components/RadarView.tsx` | Full-screen canvas + absolute overlay UI (replaces VolumePanel) |
-| **Modify** | `apps/web/src/renderers/pointCloudRenderer.ts` | Call `buildPointArrays`; `updateVolume` returns `number` (point count) |
-| **Modify** | `apps/web/src/App.tsx` | Remove Cesium; remove `VolumetricRenderer`; remove `quality`; render `<RadarView>` |
-| **Modify** | `apps/web/src/App.css` | Remove `.cesium-container` / `.volume-panel*`; add `.radar-view` full-height style |
-| **Modify** | `apps/web/src/components/RadarControls.tsx` | Remove `quality`, `onQualityChange`, `thresholdDbz`, `onThresholdChange` (threshold moves into `RadarView`) |
-| **Modify** | `apps/web/vite.config.ts` | Remove `viteStaticCopy` Cesium targets; remove `CESIUM_BASE_URL` define; remove Cesium from `optimizeDeps` |
-| **Delete** | `apps/web/src/components/VolumePanel.tsx` | Superseded by `RadarView.tsx` |
+
+| Action     | File                                              | Responsibility                                                                                              |
+| ---------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Create** | `apps/web/src/renderers/pointCloudArrays.ts`      | Pure function: build positions+colors Float32Arrays from volume data, returns point count                   |
+| **Create** | `apps/web/src/renderers/pointCloudArrays.test.ts` | Unit tests for the pure array builder                                                                       |
+| **Create** | `apps/web/src/components/RadarView.tsx`           | Full-screen canvas + absolute overlay UI (replaces VolumePanel)                                             |
+| **Modify** | `apps/web/src/renderers/pointCloudRenderer.ts`    | Call `buildPointArrays`; `updateVolume` returns `number` (point count)                                      |
+| **Modify** | `apps/web/src/App.tsx`                            | Remove Cesium; remove `VolumetricRenderer`; remove `quality`; render `<RadarView>`                          |
+| **Modify** | `apps/web/src/App.css`                            | Remove `.cesium-container` / `.volume-panel`*; add `.radar-view` full-height style                          |
+| **Modify** | `apps/web/src/components/RadarControls.tsx`       | Remove `quality`, `onQualityChange`, `thresholdDbz`, `onThresholdChange` (threshold moves into `RadarView`) |
+| **Modify** | `apps/web/vite.config.ts`                         | Remove `viteStaticCopy` Cesium targets; remove `CESIUM_BASE_URL` define; remove Cesium from `optimizeDeps`  |
+| **Delete** | `apps/web/src/components/VolumePanel.tsx`         | Superseded by `RadarView.tsx`                                                                               |
+
 
 ---
 
@@ -31,10 +33,10 @@
 The current `PointCloudRenderer.updateVolume` mixes geometry math with WebGL calls, making it untestable. Pull the math out into a pure function so it can be unit-tested without a canvas.
 
 **Files:**
+
 - Create: `apps/web/src/renderers/pointCloudArrays.ts`
 - Create: `apps/web/src/renderers/pointCloudArrays.test.ts`
-
-- [ ] **Step 1: Write the failing test**
+- **Step 1: Write the failing test**
 
 Create `apps/web/src/renderers/pointCloudArrays.test.ts`:
 
@@ -146,7 +148,7 @@ describe("buildPointArrays", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to confirm it fails**
+- **Step 2: Run test to confirm it fails**
 
 ```bash
 cd apps/web && npm test -- --run pointCloudArrays
@@ -154,7 +156,7 @@ cd apps/web && npm test -- --run pointCloudArrays
 
 Expected: `Cannot find module './pointCloudArrays.js'`
 
-- [ ] **Step 3: Create `pointCloudArrays.ts`**
+- **Step 3: Create `pointCloudArrays.ts`**
 
 Create `apps/web/src/renderers/pointCloudArrays.ts`:
 
@@ -224,7 +226,7 @@ export function buildPointArrays(
 }
 ```
 
-- [ ] **Step 4: Run tests to confirm they pass**
+- **Step 4: Run tests to confirm they pass**
 
 ```bash
 cd apps/web && npm test -- --run pointCloudArrays
@@ -232,7 +234,7 @@ cd apps/web && npm test -- --run pointCloudArrays
 
 Expected: All 8 tests pass.
 
-- [ ] **Step 5: Commit**
+- **Step 5: Commit**
 
 ```bash
 git add apps/web/src/renderers/pointCloudArrays.ts apps/web/src/renderers/pointCloudArrays.test.ts
@@ -244,9 +246,9 @@ git commit -m "feat(renderer): extract pure buildPointArrays for testable geomet
 ## Task 2: Update `PointCloudRenderer` to use `buildPointArrays` and return point count
 
 **Files:**
-- Modify: `apps/web/src/renderers/pointCloudRenderer.ts`
 
-- [ ] **Step 1: Replace the `updateVolume` body and change return type to `number`**
+- Modify: `apps/web/src/renderers/pointCloudRenderer.ts`
+- **Step 1: Replace the `updateVolume` body and change return type to `number`**
 
 Replace the entire `updateVolume` method and the `HEIGHT_SCALE` constant (it moves to `pointCloudArrays.ts`). The full updated file:
 
@@ -496,7 +498,7 @@ export class PointCloudRenderer {
 }
 ```
 
-- [ ] **Step 2: Run existing tests to confirm nothing broke**
+- **Step 2: Run existing tests to confirm nothing broke**
 
 ```bash
 cd apps/web && npm test -- --run
@@ -504,7 +506,7 @@ cd apps/web && npm test -- --run
 
 Expected: All tests pass (the `pointCloudArrays` tests from Task 1 still pass; radarGeometry tests still pass).
 
-- [ ] **Step 3: Commit**
+- **Step 3: Commit**
 
 ```bash
 git add apps/web/src/renderers/pointCloudRenderer.ts
@@ -523,9 +525,9 @@ This replaces `VolumePanel`. It renders a Three.js canvas that fills all remaini
 - **Bottom-right:** dBZ threshold range input + reset + spin buttons
 
 **Files:**
-- Create: `apps/web/src/components/RadarView.tsx`
 
-- [ ] **Step 1: Create `RadarView.tsx`**
+- Create: `apps/web/src/components/RadarView.tsx`
+- **Step 1: Create `RadarView.tsx`**
 
 ```tsx
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -704,7 +706,7 @@ export function RadarView({
 }
 ```
 
-- [ ] **Step 2: Verify TypeScript compiles**
+- **Step 2: Verify TypeScript compiles**
 
 ```bash
 cd apps/web && npm run typecheck
@@ -712,7 +714,7 @@ cd apps/web && npm run typecheck
 
 Expected: No errors. (Three.js types are already installed, `@types/three` is in devDependencies.)
 
-- [ ] **Step 3: Commit**
+- **Step 3: Commit**
 
 ```bash
 git add apps/web/src/components/RadarView.tsx
@@ -724,9 +726,9 @@ git commit -m "feat(ui): add RadarView full-screen component with on-canvas over
 ## Task 4: Update `App.css` — restyle for full-height radar view
 
 **Files:**
-- Modify: `apps/web/src/App.css`
 
-- [ ] **Step 1: Replace the Cesium and VolumePanel CSS blocks, add RadarView styles**
+- Modify: `apps/web/src/App.css`
+- **Step 1: Replace the Cesium and VolumePanel CSS blocks, add RadarView styles**
 
 Remove the `.cesium-container` block and the entire `/* ── Three.js Volume Panel */` section. Replace with:
 
@@ -877,7 +879,7 @@ Remove the `.cesium-container` block and the entire `/* ── Three.js Volume P
 
 Also remove the `.quality-readout` rule from `App.css` (it will no longer be used after Task 5).
 
-- [ ] **Step 2: Commit**
+- **Step 2: Commit**
 
 ```bash
 git add apps/web/src/App.css
@@ -889,9 +891,9 @@ git commit -m "style: replace cesium-container and volume-panel CSS with radar-v
 ## Task 5: Update `App.tsx` — remove Cesium, render `RadarView`
 
 **Files:**
-- Modify: `apps/web/src/App.tsx`
 
-- [ ] **Step 1: Rewrite `App.tsx`**
+- Modify: `apps/web/src/App.tsx`
+- **Step 1: Rewrite `App.tsx`**
 
 Replace the entire file:
 
@@ -1091,7 +1093,7 @@ export function App() {
 }
 ```
 
-- [ ] **Step 2: Verify TypeScript compiles**
+- **Step 2: Verify TypeScript compiles**
 
 ```bash
 cd apps/web && npm run typecheck
@@ -1099,7 +1101,7 @@ cd apps/web && npm run typecheck
 
 Expected: Errors about `quality` / `onQualityChange` / `thresholdDbz` / `onThresholdChange` no longer being passed to `RadarControls` — these will be fixed in Task 6.
 
-- [ ] **Step 3: Commit (do not build yet)**
+- **Step 3: Commit (do not build yet)**
 
 ```bash
 git add apps/web/src/App.tsx
@@ -1111,9 +1113,9 @@ git commit -m "feat(app): remove Cesium, render RadarView as primary full-screen
 ## Task 6: Update `RadarControls.tsx` — remove quality and threshold props
 
 **Files:**
-- Modify: `apps/web/src/components/RadarControls.tsx`
 
-- [ ] **Step 1: Rewrite `RadarControls.tsx` without quality and threshold**
+- Modify: `apps/web/src/components/RadarControls.tsx`
+- **Step 1: Rewrite `RadarControls.tsx` without quality and threshold**
 
 ```tsx
 import { VolumeProduct, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
@@ -1236,7 +1238,7 @@ export function RadarControls(props: RadarControlsProps) {
 }
 ```
 
-- [ ] **Step 2: Typecheck the full web app**
+- **Step 2: Typecheck the full web app**
 
 ```bash
 cd apps/web && npm run typecheck
@@ -1244,7 +1246,7 @@ cd apps/web && npm run typecheck
 
 Expected: Zero TypeScript errors.
 
-- [ ] **Step 3: Run all tests**
+- **Step 3: Run all tests**
 
 ```bash
 cd apps/web && npm test -- --run
@@ -1252,7 +1254,7 @@ cd apps/web && npm test -- --run
 
 Expected: All tests pass.
 
-- [ ] **Step 4: Commit**
+- **Step 4: Commit**
 
 ```bash
 git add apps/web/src/components/RadarControls.tsx
@@ -1264,11 +1266,11 @@ git commit -m "refactor(controls): remove quality and threshold props — thresh
 ## Task 7: Remove Cesium dependency and delete `VolumePanel.tsx`
 
 **Files:**
+
 - Modify: `apps/web/vite.config.ts`
 - Modify: `apps/web/package.json` (via npm uninstall)
 - Delete: `apps/web/src/components/VolumePanel.tsx`
-
-- [ ] **Step 1: Remove Cesium from `vite.config.ts`**
+- **Step 1: Remove Cesium from `vite.config.ts`**
 
 Replace the entire file:
 
@@ -1288,7 +1290,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: Uninstall Cesium**
+- **Step 2: Uninstall Cesium**
 
 ```bash
 cd apps/web && npm uninstall cesium vite-plugin-static-copy
@@ -1296,13 +1298,13 @@ cd apps/web && npm uninstall cesium vite-plugin-static-copy
 
 Expected: `package.json` no longer lists `cesium` or `vite-plugin-static-copy` in dependencies.
 
-- [ ] **Step 3: Delete `VolumePanel.tsx`**
+- **Step 3: Delete `VolumePanel.tsx`**
 
 ```bash
 rm apps/web/src/components/VolumePanel.tsx
 ```
 
-- [ ] **Step 4: Verify `VolumePanel` is not imported anywhere**
+- **Step 4: Verify `VolumePanel` is not imported anywhere**
 
 ```bash
 rg "VolumePanel" apps/web/src/
@@ -1310,13 +1312,14 @@ rg "VolumePanel" apps/web/src/
 
 Expected: No output (zero matches).
 
-- [ ] **Step 5: Confirm the dev build starts cleanly**
+- **Step 5: Confirm the dev build starts cleanly**
 
 ```bash
 cd apps/web && npm run dev
 ```
 
 Expected: Vite starts on port 5173 with no errors. Open `http://localhost:5173` and verify:
+
 - Full-height dark Three.js canvas is the primary view
 - Top-left shows site ID + name
 - Bottom-left shows NWS colorbar
@@ -1324,8 +1327,7 @@ Expected: Vite starts on port 5173 with no errors. Open `http://localhost:5173` 
 - Drag/scroll/pinch controls work
 - Spin button animates the scene
 - Threshold slider filters points live
-
-- [ ] **Step 6: Run all tests one final time**
+- **Step 6: Run all tests one final time**
 
 ```bash
 cd apps/web && npm test -- --run
@@ -1333,7 +1335,7 @@ cd apps/web && npm test -- --run
 
 Expected: All tests pass.
 
-- [ ] **Step 7: Commit**
+- **Step 7: Commit**
 
 ```bash
 git add apps/web/vite.config.ts apps/web/package.json
@@ -1346,6 +1348,7 @@ git commit -m "chore: remove Cesium dependency and VolumePanel — point cloud i
 ## Self-Review
 
 **Spec coverage check:**
+
 - ✅ Three.js point cloud as full-screen primary view — Task 3/5
 - ✅ Remove Cesium entirely — Task 7
 - ✅ dBZ threshold slider in on-canvas overlay — Task 3
@@ -1359,7 +1362,9 @@ git commit -m "chore: remove Cesium dependency and VolumePanel — point cloud i
 **Placeholder scan:** None found — every step has real code.
 
 **Type consistency check:**
+
 - `buildPointArrays` returns `{ positions, colors, pointCount }` — used in Task 1 test and Task 2 renderer
 - `PointCloudRenderer.updateVolume` returns `number` — used in `RadarView.tsx` `setPointCount(count)`
 - `RadarView` props: `{ data, metadata, site, thresholdDbz, onThresholdChange }` — matches `App.tsx` usage exactly
 - `RadarControls` no longer has `quality`, `onQualityChange`, `thresholdDbz`, `onThresholdChange` — `App.tsx` does not pass them
+

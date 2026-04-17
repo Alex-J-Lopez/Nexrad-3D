@@ -6,8 +6,8 @@
  */
 
 import type { VolumeArtifact, VolumeProduct } from "@nexrad-3d/contracts";
-import { NexradReader, isLikelyNexradFile } from "./nexrad";
-import { OdimH5Reader, isLikelyOdimH5File } from "./odim-h5";
+import { NexradReader, isLikelyNexradFile } from "./nexrad.js";
+import { OdimH5Reader, isLikelyOdimH5File } from "./odim-h5.js";
 
 export interface ParserLoadContext {
   filename: string;
@@ -45,5 +45,5 @@ export function getReaderForFile(
   return null;
 }
 
-export { NexradReader, parseNexradGeneratedAtMs, parseSiteIdFromFilename } from "./nexrad";
-export { OdimH5Reader } from "./odim-h5";
+export { NexradReader, parseNexradGeneratedAtMs, parseSiteIdFromFilename } from "./nexrad.js";
+export { OdimH5Reader } from "./odim-h5.js";
