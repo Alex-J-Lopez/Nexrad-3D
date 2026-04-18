@@ -11,7 +11,7 @@ const RANGE_RING_RADII_KM = [50, 100, 150];
 const RING_SEGMENTS = 128;
 const BACKGROUND_COLOR = 0x070a12;
 const VERTICAL_SCALE = 3;
-const MAX_SHADER_STEPS = 512;
+const SHADER_MAX_STEPS = 512;
 
 const VERTEX_SHADER = `
 varying vec3 vWorldPos;
@@ -159,7 +159,7 @@ void main() {
   vec3 color = vec3(0.0);
   float stepBins = uStepKm / max(0.0001, uBinSizeKm);
 
-  for (int i = 0; i < ${MAX_SHADER_STEPS}; i++) {
+  for (int i = 0; i < ${SHADER_MAX_STEPS}; i++) {
     if (float(i) >= uMaxSteps || alpha >= 0.90 || travel > tFar) {
       break;
     }
@@ -233,13 +233,15 @@ interface VolumeUniforms {
 }
 
 
+export type RenderingQuality = "high" | "medium" | "low";
+
 export class RadarVolumeNode {
   public mesh: THREE.Mesh<THREE.BoxGeometry, THREE.ShaderMaterial>;
   
   private volumeTexture: THREE.DataTexture | null = null;
   private angleIndexTexture: THREE.DataTexture | null = null;
   private valueIndexTexture: THREE.DataTexture | null = null;
-  public interpolationMode = 1;
+  public renderingQuality: RenderingQuality = "high";
 
   constructor() {
     const uniforms: VolumeUniforms = {
@@ -259,7 +261,7 @@ export class RadarVolumeNode {
       uVerticalScale: { value: VERTICAL_SCALE },
       uStepKm: { value: 0.5 },
       uMaxSteps: { value: 128 },
-      uMode: { value: this.interpolationMode },
+      uMode: { value: 1 },
       uOpacityScale: { value: 1.0 },
       uTime: { value: 0 },
       uFuzz: { value: 1 },
@@ -327,14 +329,24 @@ export class RadarVolumeNode {
     uniforms.uBinSizeKm.value = packed.binSizeKm;
     uniforms.uVerticalScale.value = VERTICAL_SCALE;
 
-    const desiredStepKm = Math.max(0.05, packed.binSizeKm);
+    // Apply Levels of Detail (LOD) settings based on RenderingQuality
+    const isMedium = this.renderingQuality === "medium";
+    const isLow = this.renderingQuality === "low";
+    
+    // Low quality = 2.0x step size (fewer steps), Medium = 1.3x, High = 1.0x
+    const lodMultiplier = isLow ? 2.0 : isMedium ? 1.3 : 1.0;
+    // Step loop bounds
+    const maxShaderStepsCount = isLow ? 128 : isMedium ? 256 : SHADER_MAX_STEPS;
+
+    const desiredStepKm = Math.max(0.05, packed.binSizeKm) * lodMultiplier;
     const volumeDepthKm = Math.max(20, rangeKm * 2.2);
-    const stepKm = Math.max(desiredStepKm, volumeDepthKm / MAX_SHADER_STEPS);
-    const maxSteps = Math.max(32, Math.min(MAX_SHADER_STEPS, Math.ceil(volumeDepthKm / stepKm)));
+    // Use lodMultiplier effectively on step computation
+    const stepKm = Math.max(desiredStepKm, volumeDepthKm / maxShaderStepsCount);
+    const maxSteps = Math.max(32, Math.min(maxShaderStepsCount, Math.ceil(volumeDepthKm / stepKm)));
 
     uniforms.uStepKm.value = stepKm;
     uniforms.uMaxSteps.value = maxSteps;
-    uniforms.uMode.value = this.interpolationMode;
+    uniforms.uMode.value = isLow ? 0 : 1; // Nearest neighbor (0) on low quality, trilinear (1) on medium/high
     uniforms.uOpacityScale.value = 1.35;
     uniforms.uFuzz.value = 1;
     uniforms.uVolumeMin.value.copy(volumeMin);

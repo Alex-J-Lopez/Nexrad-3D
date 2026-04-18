@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
+import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
 
 export type RadarDisplayMode = "globe" | "local";
 
@@ -30,6 +31,8 @@ interface ControlPanelProps {
   visibleLowestTiltCount: VisibleLowestTiltCount;
   onVisibleLowestTiltCountChange: (value: VisibleLowestTiltCount) => void;
   volumeSweepCount: number;
+  renderingQuality: RenderingQuality;
+  onRenderingQualityChange: (quality: RenderingQuality) => void;
 }
 
 function formatTimestamp(timestampMs?: number): string {
@@ -62,6 +65,8 @@ export function ControlPanel(props: ControlPanelProps) {
     visibleLowestTiltCount,
     onVisibleLowestTiltCountChange,
     volumeSweepCount,
+    renderingQuality,
+    onRenderingQualityChange,
   } = props;
 
   const maxTimelineIndex = Math.max(timeline.length - 1, 0);
@@ -251,6 +256,21 @@ export function ControlPanel(props: ControlPanelProps) {
                   );
                 })
               : null}
+          </select>
+        </label>
+
+        <label className="control-field">
+          <span className="control-label">Quality (LOD)</span>
+          <select
+            className="control-input"
+            value={renderingQuality}
+            onChange={(event) => {
+              onRenderingQualityChange(event.target.value as RenderingQuality);
+            }}
+          >
+            <option value="high">High (Trilinear, Full steps)</option>
+            <option value="medium">Medium (Trilinear, Half steps)</option>
+            <option value="low">Low (Nearest-neighbor, Low steps)</option>
           </select>
         </label>
       </div>

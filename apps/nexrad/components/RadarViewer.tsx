@@ -17,6 +17,7 @@ import { StatusStrip } from "./StatusStrip";
 import { useRadarData } from "@/hooks/useRadarData";
 import { loadVolumeArtifact } from "@/renderers/shared/volumeLoader";
 import { buildVolumeSweepSubset } from "@/renderers/shared/volumeSweepSubset";
+import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
 
 // Dynamic imports with ssr: false for WebGL components
 const GlobeView = dynamic(
@@ -64,6 +65,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   const [visibleLowestTiltCount, setVisibleLowestTiltCount] =
     useState<VisibleLowestTiltCount>("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [renderingQuality, setRenderingQuality] = useState<RenderingQuality>("high");
 
   const {
     sites,
@@ -88,6 +90,12 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   selectedSiteRef.current = selectedSite;
 
   const activeTimestamp = activeVolume?.generatedAtMs;
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && /Mobi|Android/i.test(window.navigator.userAgent)) {
+      setRenderingQuality("medium");
+    }
+  }, []);
 
   useEffect(() => {
     if (!selectedSiteId && sites.length > 0) {
@@ -331,6 +339,8 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
             visibleLowestTiltCount={visibleLowestTiltCount}
             onVisibleLowestTiltCountChange={setVisibleLowestTiltCount}
             volumeSweepCount={activeVolume?.sweeps.length ?? 0}
+            renderingQuality={renderingQuality}
+            onRenderingQualityChange={setRenderingQuality}
           />
         </aside>
 
@@ -373,6 +383,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
                 metadata={renderedVolume?.metadata ?? null}
                 site={siteForRendering}
                 thresholdDbz={thresholdDbz}
+                renderingQuality={renderingQuality}
                 onThresholdChange={setThresholdDbz}
                 showThresholdControls
               />
@@ -385,6 +396,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
                 metadata={renderedVolume?.metadata ?? null}
                 data={renderedVolume?.data ?? null}
                 thresholdDbz={thresholdDbz}
+                renderingQuality={renderingQuality}
               />
             )}
           </div>

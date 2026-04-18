@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
 import { MaplibreRadarLayer } from "../renderers/globe/MaplibreRadarLayer";
+import type { RenderingQuality } from "../renderers/shared/radarVolumeNode";
 
 interface GlobeViewProps {
   site: RadarSite | null;
@@ -13,6 +14,7 @@ interface GlobeViewProps {
   metadata: RadarVolumeMeta | null;
   data: Float32Array | null;
   thresholdDbz: number;
+  renderingQuality?: RenderingQuality;
 }
 
 export function GlobeView({
@@ -23,6 +25,7 @@ export function GlobeView({
   metadata,
   data,
   thresholdDbz,
+  renderingQuality = "high",
 }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -107,8 +110,8 @@ export function GlobeView({
       return;
     }
 
-    layer.update(site, metadata, data, thresholdDbz);
-  }, [site, metadata, data, thresholdDbz]);
+    layer.update(site, metadata, data, thresholdDbz, renderingQuality);
+  }, [site, metadata, data, thresholdDbz, renderingQuality]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }
