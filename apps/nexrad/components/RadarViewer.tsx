@@ -19,30 +19,42 @@ import { loadVolumeArtifact } from "@/renderers/shared/volumeLoader";
 import { buildVolumeSweepSubset } from "@/renderers/shared/volumeSweepSubset";
 
 // Dynamic imports with ssr: false for WebGL components
-const GlobeView = dynamic(() => import("./GlobeView").then((m) => ({ default: m.GlobeView })), {
-  ssr: false,
-  loading: () => <div className="cesium-viewer-host" />,
-});
+const GlobeView = dynamic(
+  () => import("./GlobeView").then((m) => ({ default: m.GlobeView })),
+  {
+    ssr: false,
+    loading: () => <div className="cesium-viewer-host" />,
+  },
+);
 
-const LocalView = dynamic(() => import("./LocalView").then((m) => ({ default: m.LocalView })), {
-  ssr: false,
-  loading: () => <div className="radar-view" />,
-});
+const LocalView = dynamic(
+  () => import("./LocalView").then((m) => ({ default: m.LocalView })),
+  {
+    ssr: false,
+    loading: () => <div className="radar-view" />,
+  },
+);
 
 interface RadarViewerProps {
   initialSites: RadarSite[];
 }
 
 export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
-  const [selectedSiteId, setSelectedSiteId] = useState<string | undefined>(undefined);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | undefined>(
+    undefined,
+  );
   const [selectedProduct, setSelectedProduct] = useState<VolumeProduct>(
-    VolumeProduct.REFLECTIVITY
+    VolumeProduct.REFLECTIVITY,
   );
   const [displayMode, setDisplayMode] = useState<RadarDisplayMode>("globe");
   const [liveFollow, setLiveFollow] = useState(true);
   const [timelineIndex, setTimelineIndex] = useState(0);
-  const [activeVolume, setActiveVolume] = useState<RadarVolumeMeta | null>(null);
-  const [renderSource, setRenderSource] = useState<"artifact" | "synthetic" | null>(null);
+  const [activeVolume, setActiveVolume] = useState<RadarVolumeMeta | null>(
+    null,
+  );
+  const [renderSource, setRenderSource] = useState<
+    "artifact" | "synthetic" | null
+  >(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [loadedVolumeData, setLoadedVolumeData] = useState<{
     data: Float32Array;
@@ -51,6 +63,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   const [thresholdDbz, setThresholdDbz] = useState(15);
   const [visibleLowestTiltCount, setVisibleLowestTiltCount] =
     useState<VisibleLowestTiltCount>("all");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const {
     sites,
@@ -68,7 +81,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
 
   const selectedSite = useMemo(
     () => sites.find((s) => s.id === selectedSiteId),
-    [selectedSiteId, sites]
+    [selectedSiteId, sites],
   );
 
   const selectedSiteRef = useRef(selectedSite);
@@ -82,7 +95,11 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
       return;
     }
 
-    if (selectedSiteId && !sites.some((s) => s.id === selectedSiteId) && sites.length > 0) {
+    if (
+      selectedSiteId &&
+      !sites.some((s) => s.id === selectedSiteId) &&
+      sites.length > 0
+    ) {
       setSelectedSiteId(sites[0].id);
     }
   }, [selectedSiteId, sites]);
@@ -93,7 +110,9 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
       return;
     }
 
-    setTimelineIndex((prev) => Math.min(prev, Math.max(timeline.length - 1, 0)));
+    setTimelineIndex((prev) =>
+      Math.min(prev, Math.max(timeline.length - 1, 0)),
+    );
   }, [liveFollow, timeline.length]);
 
   useEffect(() => {
@@ -195,7 +214,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   const volumeMetaForPlacement = renderedVolume?.metadata ?? activeVolume;
   const siteForRendering = useMemo(
     () => radarSiteForVolume(selectedSite, volumeMetaForPlacement),
-    [selectedSite, volumeMetaForPlacement]
+    [selectedSite, volumeMetaForPlacement],
   );
 
   const statusText = useMemo(() => {
@@ -240,10 +259,44 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   return (
     <div className="app">
       <div className="app-body">
-        <aside className="app-sidebar" aria-label="Radar controls">
+        {/* Mobile sidebar overlay backdrop */}
+        {isSidebarOpen && (
+          <div
+            className="mobile-sidebar-backdrop"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+        <aside
+          className={`app-sidebar ${isSidebarOpen ? "open" : ""}`}
+          aria-label="Radar controls"
+        >
           <div className="sidebar-brand">
-            <h1 className="sidebar-title">Nexrad 3D</h1>
-            <p className="sidebar-tagline">Volumetric radar — globe or local 3D</p>
+            <div className="sidebar-header-row">
+              <h1 className="sidebar-title">Nexrad 3D</h1>
+              <button
+                className="mobile-sidebar-close"
+                onClick={() => setIsSidebarOpen(false)}
+                aria-label="Close controls"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinelinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <p className="sidebar-tagline">
+              Volumetric radar — globe or local 3D
+            </p>
           </div>
 
           <ControlPanel
@@ -282,6 +335,29 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
         </aside>
 
         <div className="app-main">
+          <div className="mobile-header">
+            <button
+              className="mobile-sidebar-toggle"
+              onClick={() => setIsSidebarOpen(true)}
+              aria-label="Open controls"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            <span className="mobile-header-title">Nexrad 3D</span>
+          </div>
           <StatusStrip
             statusText={statusText}
             renderSource={renderSource}
