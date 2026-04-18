@@ -1,7 +1,22 @@
+/**
+ * Nexrad-3D Ingest Worker
+ * 
+ * This service is responsible for continually polling NOAA's NEXRAD Level II 
+ * data servers to find, download, and parse new radar sweeps. Once downloaded,
+ * it parses the binary radar data arrays into usable volume products (like 
+ * Reflectivity or Velocity), uploads the raw and parsed data to an S3-compatible 
+ * object storage (such as MinIO), and publishes metadata/events to Redis. 
+ * This enables the frontend and other services to render real-time 3D radar data.
+ * 
+ * It also maintains a scheduled cleanup process to prevent the object storage disk 
+ * from filling up, actively deleting radar sweeps older than a configured limit.
+ */
 import {
   CreateBucketCommand,
   HeadBucketCommand,
   PutObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
@@ -28,7 +43,15 @@ const pollIntervalSeconds = parseInt(
 const maxFilesPerPoll = parseInt(process.env.INGEST_MAX_FILES_PER_POLL || "3", 10);
 const timelineLimit = parseInt(process.env.TIMELINE_LIMIT || "240", 10);
 
-function parseIngestProductList(): VolumeProduct[] {
+/**
+ * Parses the INGEST_PRODUCTS environment variable (a comma-separated string) 
+ * to determine which specific radar metrics (like Reflectivity, Velocity, etc.) 
+ * to parse and extract from the raw Level II binary data. 
+ * Defaults to all supported decodable volume products.
+ * 
+ * @returns {VolumeProduct[]} An array of volume products to process.
+ */
+const parseIngestProductList = (): VolumeProduct[] => {
   const raw = process.env.INGEST_PRODUCTS?.trim();
   if (!raw) {
     return [...LEVEL2_DECODABLE_VOLUME_PRODUCTS];
@@ -69,6 +92,13 @@ const s3 = new S3Client({
   region: "us-east-1",
   endpoint: minioEndpoint,
   forcePathStyle: true,
+/**
+ * Parses the plain text output of NOAA's dir.list directory listing
+ * to extract a clean array of radar file names.
+ * 
+ * @param {string} rawDirList The raw text response from a NOAA dir.list URL.
+ * @returns {string[]} An array of file names.
+ */
   credentials: {
     accessKeyId: minioAccessKey,
     secretAccessKey: minioSecretKey,
@@ -77,7 +107,7 @@ const s3 = new S3Client({
 
 const inFlightSitePolls = new Set<string>();
 
-function parseDirList(rawDirList: string): string[] {
+const parseDirList = (rawDirList: string): string[] => {
   return rawDirList
     .split("\n")
     .map((line) => line.trim())
@@ -91,14 +121,29 @@ function parseDirList(rawDirList: string): string[] {
     .filter((filename) => filename.length > 0 && filename !== "dir.list");
 }
 
-function buildRadarFileUrl(siteId: string, filename: string): string {
+/**
+ * Builds the full NOAA download URL for a specific radar file.
+ * 
+ * @param {string} siteId - The 4-letter radar site station ID (e.g., KGRB).
+ * @param {string} filename - The name of the file to download.
+ */
+const buildRadarFileUrl = (siteId: string, filename: string): string => {
   return `${noaaBaseUrl}/${siteId}/${filename}`;
 }
 
-function selectFilesToProcess(
+/**
+ * Compares the list of all available NOAA files with the last processed file 
+ * from Redis. Selects the next set of files to download, avoiding the very newest
+ * file if it sits at the end of the listing to prevent partial file corruption.
+ * 
+ * @param {string[]} allFiles - Current directory listing from NOAA.
+ * @param {string | null} lastProcessedFile - Reference of the last file fully processed.
+ * @returns {string[]} The array of file names ripe for ingestion.
+ */
+const selectFilesToProcess = (
   allFiles: string[],
   lastProcessedFile: string | null
-): string[] {
+): string[] => {
   if (allFiles.length === 0) {
     return [];
   }
@@ -126,11 +171,21 @@ function selectFilesToProcess(
   return pending.slice(-maxFilesPerPoll);
 }
 
-function getSiteStateKey(siteId: string): string {
+/**
+ * Gets a unique, site-specific Redis key mapped to its ingestion state.
+ * @param {string} siteId - The 4-letter radar station ID.
+ */
+const getSiteStateKey = (siteId: string): string => {
   return `ingestion:state:${siteId}`;
 }
 
-async function readState(siteId: string): Promise<IngestionState> {
+/**
+ * Reads the latest ingestion state from Redis for a particular site.
+ * 
+ * @param {string} siteId - The radar station ID.
+ * @returns {Promise<IngestionState>} An object representing the site's state (failures, last poll, etc).
+ */
+const readState = async (siteId: string): Promise<IngestionState> => {
   const existing = await redis.get(getSiteStateKey(siteId));
   if (!existing) {
     return {
@@ -143,17 +198,35 @@ async function readState(siteId: string): Promise<IngestionState> {
   return JSON.parse(existing) as IngestionState;
 }
 
-async function writeState(state: IngestionState): Promise<void> {
+/**
+ * Writes the latest ingestion state metadata to Redis for a specified site with a TTL.
+ *
+ * @param {IngestionState} state - The object containing state variables like lastPolledAtMs.
+ */
+const writeState = async (state: IngestionState): Promise<void> => {
   await redis.set(getSiteStateKey(state.siteId), JSON.stringify(state), {
     EX: 60 * 60 * 24,
   });
 }
 
-async function publishEvent(event: StreamEventPayload): Promise<void> {
+/**
+ * Dispatches an event payload sequentially over the Redis Pub/Sub channels 
+ * allowing other microservices (like socket pushers) to consume them.
+ * 
+ * @param {StreamEventPayload} event - The specific StreamEventPayload message to cast.
+ */
+const publishEvent = async (event: StreamEventPayload): Promise<void> => {
   await redis.publish("radar:events", JSON.stringify(event));
 }
 
-function toNodeBuffer(bytes: ArrayBuffer | Uint8Array): Buffer {
+/**
+ * Utility function to convert generic ArrayBuffer/Uint8Array responses 
+ * from the browser-backed Fetch API into a Node compatible Buffer instance.
+ *
+ * @param {ArrayBuffer | Uint8Array} bytes - Input primitive array structures.
+ * @returns {Buffer} Typed Node.js memory Buffer.
+ */
+const toNodeBuffer = (bytes: ArrayBuffer | Uint8Array): Buffer => {
   if (bytes instanceof ArrayBuffer) {
     return Buffer.from(bytes);
   }
@@ -161,11 +234,19 @@ function toNodeBuffer(bytes: ArrayBuffer | Uint8Array): Buffer {
   return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
-async function uploadObject(
+/**
+ * Primary function backing integration with local object storage (aka AWS S3 API/MinIO).
+ * Sends raw bytes via S3 PutObject to the preconfigured storage block key.
+ * 
+ * @param {string} storageKey - The file location path defined for this upload payload.
+ * @param {ArrayBuffer | Uint8Array} payload - Precompiled byte array stream data.
+ * @param {string} contentType - Explicit MIME type indicating file nature.
+ */
+const uploadObject = async (
   storageKey: string,
   payload: ArrayBuffer | Uint8Array,
   contentType: string
-): Promise<void> {
+): Promise<void> => {
   if (!objectStorageEnabled) {
     return;
   }
@@ -180,7 +261,11 @@ async function uploadObject(
   );
 }
 
-async function ensureBucketExists(): Promise<void> {
+/**
+ * Validates initialization by polling the cloud object store for Bucket existence.
+ * Constructs it actively if a 404/NotFoundError is returned handling early access gracefully.
+ */
+const ensureBucketExists = async (): Promise<void> => {
   if (!objectStorageEnabled) {
     return;
   }
@@ -192,7 +277,15 @@ async function ensureBucketExists(): Promise<void> {
   }
 }
 
-async function persistVolumeMetadata(metadata: RadarVolumeMeta): Promise<void> {
+/**
+ * Generates secondary index mappings inside Redis required by clients rendering volume assets.
+ * Sets independent standard cache layers for the specific generated sweep mapped to ID,
+ * and maintains an active TimeSeries sorted set indicating volume chronological states.
+ * Limits sets via `TIMELINE_LIMIT` properties removing stale historic tracking.
+ * 
+ * @param {RadarVolumeMeta} metadata - Constructed asset volume identifiers describing state.
+ */
+const persistVolumeMetadata = async (metadata: RadarVolumeMeta): Promise<void> => {
   const latestKey = `radar:latest:${metadata.siteId}:${metadata.product}`;
   const volumeKey = `radar:volume:${metadata.volumeId}`;
   const timelineKey = `radar:timeline:${metadata.siteId}:${metadata.product}`;
@@ -217,7 +310,14 @@ async function persistVolumeMetadata(metadata: RadarVolumeMeta): Promise<void> {
   }
 }
 
-async function fetchFileList(siteId: string): Promise<string[]> {
+/**
+ * Downloads the HTTP text body mapping the directory layout from an authoritative 
+ * US Government NEXRAD distribution host resolving to array lines.
+ *
+ * @param {string} siteId - 4-character Nexrad ground station identifier code.
+ * @returns {Promise<string[]>} Normalized string index paths for matching volumes.
+ */
+const fetchFileList = async (siteId: string): Promise<string[]> => {
   const dirListUrl = `${noaaBaseUrl}/${siteId}/dir.list`;
   const response = await fetch(dirListUrl, { cache: "no-store" });
 
@@ -229,7 +329,15 @@ async function fetchFileList(siteId: string): Promise<string[]> {
   return parseDirList(rawDirList);
 }
 
-async function processRadarFile(siteId: string, filename: string): Promise<void> {
+/**
+ * Downloads a raw binary NEXRAD Level II file, extracts requested radar volume products
+ * (e.g. Reflectivity, Velocity) to optimized Float32 grids, and outputs these products 
+ * to Amazon S3 / Minio block storage alongside standard Redis notification broadcasts.
+ *
+ * @param {string} siteId - Identifies the specific tower generating the underlying signal.
+ * @param {string} filename - Specific timestamp file payload target from NOAA URL strings.
+ */
+const processRadarFile = async (siteId: string, filename: string): Promise<void> => {
   const fileUrl = buildRadarFileUrl(siteId, filename);
   const response = await fetch(fileUrl, { cache: "no-store" });
 
@@ -302,7 +410,14 @@ async function processRadarFile(siteId: string, filename: string): Promise<void>
   }
 }
 
-async function pollRadarSite(siteId: string): Promise<void> {
+/**
+ * High-level orchestration function to poll a given radar site. 
+ * Resolves standard configuration, validates current status limits via remote endpoints,
+ * kicks off individual file ingestion blocks sequentially, and updates metrics logs.
+ *
+ * @param {string} siteId - Targeted radar asset string.
+ */
+const pollRadarSite = async (siteId: string): Promise<void> => {
   const normalizedSiteId = siteId.trim().toUpperCase();
   if (!normalizedSiteId) {
     return;
@@ -365,7 +480,60 @@ async function pollRadarSite(siteId: string): Promise<void> {
   }
 }
 
-async function main() {
+const MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Sweeps objects on the MinIO bucket ensuring the persistent drive is not filled beyond
+ * a 15-minute timeframe. Useful on cloud hosts maintaining tight 50GB storage.
+ */
+const cleanupOldObjects = async () => {
+  if (!objectStorageEnabled) return;
+
+  const thresholdTime = Date.now() - MAX_AGE_MS;
+  let continuationToken: string | undefined;
+
+  try {
+    do {
+      const response = await s3.send(
+        new ListObjectsV2Command({
+          Bucket: minioBucket,
+          ContinuationToken: continuationToken,
+        })
+      );
+
+      if (!response.Contents || response.Contents.length === 0) break;
+
+      const objectsToDelete = response.Contents.map((obj) => {
+        const lastModified = obj.LastModified ? obj.LastModified.getTime() : 0;
+        return { Key: obj.Key, age: lastModified };
+      })
+      .filter((obj) => obj.age > 0 && obj.age < thresholdTime && obj.Key)
+      .map((obj) => ({ Key: obj.Key as string }));
+
+      if (objectsToDelete.length > 0) {
+        await s3.send(
+          new DeleteObjectsCommand({
+            Bucket: minioBucket,
+            Delete: { Objects: objectsToDelete, Quiet: true },
+          })
+        );
+        console.log(`🧹 Cleaned up ${objectsToDelete.length} stale objects older than 15 minutes.`);
+      }
+
+      continuationToken = response.NextContinuationToken;
+    } while (continuationToken);
+  } catch (error) {
+    console.error("Cleanup failed:", error);
+  }
+}
+
+/**
+ * Ingestion Worker Execution Point
+ * Binds environment endpoints, kicks off S3 validation,
+ * instantiates asynchronous polling timers per desired tracking station interval,
+ * and maintains continuous periodic cleanup iterations via independent thread spans.
+ */
+const main = async () => {
   try {
     await redis.connect();
     console.log("Ingestion worker connected to Redis");
@@ -373,6 +541,11 @@ async function main() {
     if (objectStorageEnabled) {
       console.log(`Object storage enabled at ${minioEndpoint} (bucket: ${minioBucket})`);
       await ensureBucketExists();
+
+      // Add a scheduled task to clean up old items every 60 seconds
+      setInterval(() => {
+        void cleanupOldObjects();
+      }, 60 * 1000);
     } else {
       console.log("Object storage disabled by OBJECT_STORAGE_ENABLED=false");
     }
