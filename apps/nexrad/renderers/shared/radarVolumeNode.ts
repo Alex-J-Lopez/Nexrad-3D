@@ -97,14 +97,15 @@ float sampleVolumeTrilinear(float radiusIndex, float thetaIndex, float sweepInde
   float v011 = sampleVolumeNearest(r0,     t0 + 1.0, s0 + 1.0);
   float v111 = sampleVolumeNearest(r0 + 1.0, t0 + 1.0, s0 + 1.0);
 
-  v000 = max(v000, uValueLower);
-  v100 = max(v100, uValueLower);
-  v010 = max(v010, uValueLower);
-  v110 = max(v110, uValueLower);
-  v001 = max(v001, uValueLower);
-  v101 = max(v101, uValueLower);
-  v011 = max(v011, uValueLower);
-  v111 = max(v111, uValueLower);
+  // Exclude trilinear fringes if ANY neighbor is NO_DATA (-9999)
+  // This prevents NO_DATA from dragging down valid velocities and causing false intense boundaries.
+  if (v000 < -9000.0 || v100 < -9000.0 || v010 < -9000.0 || v110 < -9000.0 ||
+      v001 < -9000.0 || v101 < -9000.0 || v011 < -9000.0 || v111 < -9000.0) {
+    return -9999.0;
+  }
+
+  // Skip clamping to uValueLower here so that NO_DATA (-9999) 
+  // propagates through mix() and can be thresholded out in sampleValueIndex.
 
   float v00 = mix(v000, v100, rf);
   float v10 = mix(v010, v110, rf);
@@ -117,6 +118,7 @@ float sampleVolumeTrilinear(float radiusIndex, float thetaIndex, float sweepInde
 }
 
 vec4 sampleValueIndex(float value) {
+  if (value < uValueLower - 5.0) return vec4(0.0);
   float mapped = clamp((value - uValueLower) / max(0.0001, uValueUpper - uValueLower), 0.0, 1.0) * 16383.0;
   float x = mod(floor(mapped), 128.0);
   float y = floor(floor(mapped) / 128.0);
