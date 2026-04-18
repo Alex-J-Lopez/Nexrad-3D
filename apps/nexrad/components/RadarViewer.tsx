@@ -23,7 +23,7 @@ const GlobeView = dynamic(
   () => import("./GlobeView").then((m) => ({ default: m.GlobeView })),
   {
     ssr: false,
-    loading: () => <div className="cesium-viewer-host" />,
+    loading: () => <div className="radar-view-placeholder" />,
   },
 );
 

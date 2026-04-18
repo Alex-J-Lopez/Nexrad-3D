@@ -1,6 +1,6 @@
 "use client";
 
-import { VolumeProduct, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
+import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
 
 export type RadarDisplayMode = "globe" | "local";
 
@@ -29,8 +29,6 @@ interface ControlPanelProps {
   onVisibleLowestTiltCountChange: (value: VisibleLowestTiltCount) => void;
   volumeSweepCount: number;
 }
-
-const productOptions = Object.values(VolumeProduct);
 
 function formatTimestamp(timestampMs?: number): string {
   if (!timestampMs) {
@@ -103,9 +101,9 @@ export function ControlPanel(props: ControlPanelProps) {
               onProductChange(event.target.value as VolumeProduct);
             }}
           >
-            {productOptions.map((productOption) => (
-              <option key={productOption} value={productOption}>
-                {productOption}
+            {VOLUME_PRODUCT_DEFINITIONS.map((def) => (
+              <option key={def.product} value={def.product}>
+                {def.label}
               </option>
             ))}
           </select>

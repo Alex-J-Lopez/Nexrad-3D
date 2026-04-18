@@ -263,17 +263,10 @@ body {
   position: relative;
 }
 
-.cesium-viewer-host {
+.radar-view-placeholder {
   flex: 1;
   min-height: 0;
   width: 100%;
-}
-
-.cesium-viewer-host .cesium-viewer,
-.cesium-viewer-host .cesium-widget,
-.cesium-viewer-host .cesium-widget canvas {
-  width: 100% !important;
-  height: 100% !important;
 }
 
 .radar-view {
