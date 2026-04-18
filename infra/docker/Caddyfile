@@ -1,0 +1,3 @@
+nexrad3d.com, www.nexrad3d.com {
+    reverse_proxy nexrad:3000
+}
