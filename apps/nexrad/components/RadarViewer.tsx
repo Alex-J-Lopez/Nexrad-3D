@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
   VolumeProduct,
@@ -303,7 +304,8 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
               </button>
             </div>
             <p className="sidebar-tagline">
-              Volumetric radar — globe or local 3D
+              Volumetric radar — globe or local 3D<br/>
+              <Link href="/info" className="info-link">How it works</Link>
             </p>
           </div>
 
