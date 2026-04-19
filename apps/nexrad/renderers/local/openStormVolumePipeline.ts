@@ -150,11 +150,17 @@ function buildVelocityValueIndex(): ValueIndexTexture {
   colorRangeHsl(out, valueToIndex(lower, upper, 50), valueToIndex(lower, upper, 100), 0.0, 1, 0.5, 0.0, 1, 0.5);
 
   for (let i = 0; i < VALUE_INDEX_SIZE; i++) {
-    const alpha = Math.abs(i - 8191.5) / 8191.5;
-    out[i * 4 + 3] = alpha * 2 + 0.1;
+    // Provide a consistent baseline alpha for velocity (fading only slightly towards 0)
+    // so that clear air mode doesn't completely disappear.
+    const normalized = Math.abs(i - 8191.5) / 8191.5;
+    const alpha = 0.5 + (normalized * 0.5); // Scale from 0.5 (at 0 velocity) to 1.0 (at max velocity)
+    out[i * 4 + 3] = alpha;
   }
-  out[8191 * 4 + 3] = 0;
-  out[8192 * 4 + 3] = 0;
+
+  // Still hide absolute theoretical zero if needed to reduce tiny static, 
+  // but generally radar noise will fall around it.
+  // out[8191 * 4 + 3] = 0; 
+  // out[8192 * 4 + 3] = 0;
 
   return { data: out, lower, upper };
 }

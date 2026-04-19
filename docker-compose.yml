@@ -5,6 +5,20 @@ services:
     ports:
       - "6379:6379"
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: nexrad-3d-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nexrad
+    restart: unless-stopped
+
   minio:
     image: minio/minio:latest
     container_name: nexrad-3d-minio
@@ -33,7 +47,7 @@ services:
 
   nexrad:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/nexrad/Dockerfile
     container_name: nexrad-3d-app
     ports:
@@ -56,7 +70,7 @@ services:
   # Polls NOAA NEXRAD Level II, decodes volumes, writes Redis + MinIO (required for data in the UI).
   ingest-worker:
     build:
-      context: ../..
+      context: .
       dockerfile: services/ingest-worker/Dockerfile
     container_name: nexrad-3d-ingest
     environment:
@@ -76,3 +90,5 @@ services:
 
 volumes:
   minio-data:
+  caddy_data:
+  caddy_config:
