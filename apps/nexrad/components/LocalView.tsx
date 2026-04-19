@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
 import { VolumeRayMarchRenderer } from "@/renderers/local/VolumeRayMarchRenderer";
+import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
 
 // NWS colorbar gradient stops [fraction 0–1, hex color]
 const COLORBAR_STOPS: Array<[number, string]> = [
@@ -37,6 +38,7 @@ interface LocalViewProps {
   metadata: RadarVolumeMeta | null;
   site: RadarSite | null;
   thresholdDbz: number;
+  renderingQuality?: RenderingQuality;
   onThresholdChange: (value: number) => void;
   /** When false, threshold slider is omitted (e.g. threshold lives in header for globe view). */
   showThresholdControls?: boolean;
@@ -47,6 +49,7 @@ export function LocalView({
   metadata,
   site,
   thresholdDbz,
+  renderingQuality = "high",
   onThresholdChange,
   showThresholdControls = true,
 }: LocalViewProps) {
@@ -90,9 +93,9 @@ export function LocalView({
       return;
     }
 
-    const count = rendererRef.current?.updateVolume(data, metadata, thresholdDbz) ?? 0;
+    const count = rendererRef.current?.updateVolume(data, metadata, thresholdDbz, renderingQuality) ?? 0;
     setVoxelCount(count);
-  }, [data, metadata, thresholdDbz]);
+  }, [data, metadata, thresholdDbz, renderingQuality]);
 
   const handleToggleSpin = useCallback(() => {
     if (!rendererRef.current) return;

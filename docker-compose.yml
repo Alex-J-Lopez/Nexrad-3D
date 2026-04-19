@@ -47,7 +47,7 @@ services:
 
   nexrad:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/nexrad/Dockerfile
     container_name: nexrad-3d-app
     ports:
@@ -70,7 +70,7 @@ services:
   # Polls NOAA NEXRAD Level II, decodes volumes, writes Redis + MinIO (required for data in the UI).
   ingest-worker:
     build:
-      context: ../..
+      context: .
       dockerfile: services/ingest-worker/Dockerfile
     container_name: nexrad-3d-ingest
     environment:

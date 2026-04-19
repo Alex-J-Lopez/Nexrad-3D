@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { RadarVolumeMeta } from "@nexrad-3d/contracts";
-import { RadarVolumeNode } from "../shared/radarVolumeNode";
+import { RadarVolumeNode, type RenderingQuality } from "../shared/radarVolumeNode";
 
 const RANGE_RING_RADII_KM = [50, 100, 150];
 const RING_SEGMENTS = 128;
@@ -142,7 +142,8 @@ export class VolumeRayMarchRenderer {
     this.updateCamera();
   }
 
-  updateVolume(data: Float32Array, metadata: RadarVolumeMeta, thresholdDbz: number): number {
+  updateVolume(data: Float32Array, metadata: RadarVolumeMeta, thresholdDbz: number, quality: RenderingQuality = "high"): number {
+    this.radarNode.renderingQuality = quality;
     return this.radarNode.updateVolume(data, metadata, thresholdDbz, this.renderer.capabilities.maxTextureSize);
   }
 

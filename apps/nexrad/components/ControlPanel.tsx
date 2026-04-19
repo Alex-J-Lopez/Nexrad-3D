@@ -1,6 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
+import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
 
 export type RadarDisplayMode = "globe" | "local";
 
@@ -28,6 +31,8 @@ interface ControlPanelProps {
   visibleLowestTiltCount: VisibleLowestTiltCount;
   onVisibleLowestTiltCountChange: (value: VisibleLowestTiltCount) => void;
   volumeSweepCount: number;
+  renderingQuality: RenderingQuality;
+  onRenderingQualityChange: (quality: RenderingQuality) => void;
 }
 
 function formatTimestamp(timestampMs?: number): string {
@@ -60,6 +65,8 @@ export function ControlPanel(props: ControlPanelProps) {
     visibleLowestTiltCount,
     onVisibleLowestTiltCountChange,
     volumeSweepCount,
+    renderingQuality,
+    onRenderingQualityChange,
   } = props;
 
   const maxTimelineIndex = Math.max(timeline.length - 1, 0);
@@ -70,8 +77,62 @@ export function ControlPanel(props: ControlPanelProps) {
   const tiltSelectValue =
     visibleLowestTiltCount === "all" ? "all" : String(visibleLowestTiltCount);
 
+  const [isInfoModalOpen, setInfoModalOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const modalContent = isInfoModalOpen && mounted ? createPortal(
+    <div className="modal-overlay" onClick={() => setInfoModalOpen(false)}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">Radar Data Types</h3>
+          <button 
+            type="button" 
+            className="modal-close" 
+            onClick={() => setInfoModalOpen(false)}
+            title="Close"
+          >
+            &times;
+          </button>
+        </div>
+        <div className="modal-body">
+          <p>
+            Radar sites emit radio waves and measure their return to determine atmospheric conditions. 
+            Below is a short guide on interpreting the various products generated from these sweeps.
+          </p>
+          
+          <h4>Reflectivity (REF)</h4>
+          <p>
+            Measures the amount of energy returned to the radar. Higher values (warm colors like reds and purples) generally indicate heavier precipitation, such as heavy rain or hail, while lower values (cool colors like greens and blues) suggest light rain or snow.
+          </p>
+
+          <h4>Velocity (VEL / VELD)</h4>
+          <p>
+            Measures the speed and direction of particles relative to the radar. Typically, green/blue colors mean wind/particles are moving <strong>toward</strong> the radar, while red/orange colors mean they are moving <strong>away</strong>. Where these colors tightly border each other, it can indicate rotation (mesocyclones).
+          </p>
+
+          <h4>Spectrum Width (SW)</h4>
+          <p>
+            Represents the variation in velocities within a given area. High spectrum width points to strong turbulence and diverse wind speeds (often found near severe weather boundaries or updrafts), whereas low spectrum width indicates uniform wind flow.
+          </p>
+
+          <h4>Correlation Coefficient (CC)</h4>
+          <p>
+            Measures how uniform the shape and size of radar targets are. Values near 1.0 (warm colors) indicate uniform targets like rain or snow. Lower values (cooler colors) suggest mixed targets such as birds, insects, ground clutter, or a mixture of rain, hail, and lofted tornadic debris (debris balls).
+          </p>
+        </div>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   return (
     <div className="controls-panel">
+      {modalContent}
+
       <div className="sidebar-section">
         <div className="sidebar-section-title">Source</div>
 
@@ -93,7 +154,17 @@ export function ControlPanel(props: ControlPanelProps) {
         </label>
 
         <label className="control-field">
-          <span className="control-label">Product</span>
+          <span className="control-label">
+            Product
+            <button 
+              type="button" 
+              className="info-button" 
+              onClick={() => setInfoModalOpen(true)}
+              title="Learn about radar products"
+            >
+              &#9432;
+            </button>
+          </span>
           <select
             className="control-input"
             value={selectedProduct}
@@ -185,6 +256,21 @@ export function ControlPanel(props: ControlPanelProps) {
                   );
                 })
               : null}
+          </select>
+        </label>
+
+        <label className="control-field">
+          <span className="control-label">Quality (LOD)</span>
+          <select
+            className="control-input"
+            value={renderingQuality}
+            onChange={(event) => {
+              onRenderingQualityChange(event.target.value as RenderingQuality);
+            }}
+          >
+            <option value="high">High (Trilinear, Full steps)</option>
+            <option value="medium">Medium (Trilinear, Half steps)</option>
+            <option value="low">Low (Nearest-neighbor, Low steps)</option>
           </select>
         </label>
       </div>

@@ -11,7 +11,7 @@ const RANGE_RING_RADII_KM = [50, 100, 150];
 const RING_SEGMENTS = 128;
 const BACKGROUND_COLOR = 0x070a12;
 const VERTICAL_SCALE = 3;
-const MAX_SHADER_STEPS = 512;
+const SHADER_MAX_STEPS = 512;
 
 const VERTEX_SHADER = `
 varying vec3 vWorldPos;
@@ -97,14 +97,15 @@ float sampleVolumeTrilinear(float radiusIndex, float thetaIndex, float sweepInde
   float v011 = sampleVolumeNearest(r0,     t0 + 1.0, s0 + 1.0);
   float v111 = sampleVolumeNearest(r0 + 1.0, t0 + 1.0, s0 + 1.0);
 
-  v000 = max(v000, uValueLower);
-  v100 = max(v100, uValueLower);
-  v010 = max(v010, uValueLower);
-  v110 = max(v110, uValueLower);
-  v001 = max(v001, uValueLower);
-  v101 = max(v101, uValueLower);
-  v011 = max(v011, uValueLower);
-  v111 = max(v111, uValueLower);
+  // Exclude trilinear fringes if ANY neighbor is NO_DATA (-9999)
+  // This prevents NO_DATA from dragging down valid velocities and causing false intense boundaries.
+  if (v000 < -9000.0 || v100 < -9000.0 || v010 < -9000.0 || v110 < -9000.0 ||
+      v001 < -9000.0 || v101 < -9000.0 || v011 < -9000.0 || v111 < -9000.0) {
+    return -9999.0;
+  }
+
+  // Skip clamping to uValueLower here so that NO_DATA (-9999) 
+  // propagates through mix() and can be thresholded out in sampleValueIndex.
 
   float v00 = mix(v000, v100, rf);
   float v10 = mix(v010, v110, rf);
@@ -117,6 +118,7 @@ float sampleVolumeTrilinear(float radiusIndex, float thetaIndex, float sweepInde
 }
 
 vec4 sampleValueIndex(float value) {
+  if (value < uValueLower - 5.0) return vec4(0.0);
   float mapped = clamp((value - uValueLower) / max(0.0001, uValueUpper - uValueLower), 0.0, 1.0) * 16383.0;
   float x = mod(floor(mapped), 128.0);
   float y = floor(floor(mapped) / 128.0);
@@ -157,7 +159,7 @@ void main() {
   vec3 color = vec3(0.0);
   float stepBins = uStepKm / max(0.0001, uBinSizeKm);
 
-  for (int i = 0; i < ${MAX_SHADER_STEPS}; i++) {
+  for (int i = 0; i < ${SHADER_MAX_STEPS}; i++) {
     if (float(i) >= uMaxSteps || alpha >= 0.90 || travel > tFar) {
       break;
     }
@@ -231,13 +233,15 @@ interface VolumeUniforms {
 }
 
 
+export type RenderingQuality = "high" | "medium" | "low";
+
 export class RadarVolumeNode {
   public mesh: THREE.Mesh<THREE.BoxGeometry, THREE.ShaderMaterial>;
   
   private volumeTexture: THREE.DataTexture | null = null;
   private angleIndexTexture: THREE.DataTexture | null = null;
   private valueIndexTexture: THREE.DataTexture | null = null;
-  public interpolationMode = 1;
+  public renderingQuality: RenderingQuality = "high";
 
   constructor() {
     const uniforms: VolumeUniforms = {
@@ -257,7 +261,7 @@ export class RadarVolumeNode {
       uVerticalScale: { value: VERTICAL_SCALE },
       uStepKm: { value: 0.5 },
       uMaxSteps: { value: 128 },
-      uMode: { value: this.interpolationMode },
+      uMode: { value: 1 },
       uOpacityScale: { value: 1.0 },
       uTime: { value: 0 },
       uFuzz: { value: 1 },
@@ -325,14 +329,24 @@ export class RadarVolumeNode {
     uniforms.uBinSizeKm.value = packed.binSizeKm;
     uniforms.uVerticalScale.value = VERTICAL_SCALE;
 
-    const desiredStepKm = Math.max(0.05, packed.binSizeKm);
+    // Apply Levels of Detail (LOD) settings based on RenderingQuality
+    const isMedium = this.renderingQuality === "medium";
+    const isLow = this.renderingQuality === "low";
+    
+    // Low quality = 2.0x step size (fewer steps), Medium = 1.3x, High = 1.0x
+    const lodMultiplier = isLow ? 2.0 : isMedium ? 1.3 : 1.0;
+    // Step loop bounds
+    const maxShaderStepsCount = isLow ? 128 : isMedium ? 256 : SHADER_MAX_STEPS;
+
+    const desiredStepKm = Math.max(0.05, packed.binSizeKm) * lodMultiplier;
     const volumeDepthKm = Math.max(20, rangeKm * 2.2);
-    const stepKm = Math.max(desiredStepKm, volumeDepthKm / MAX_SHADER_STEPS);
-    const maxSteps = Math.max(32, Math.min(MAX_SHADER_STEPS, Math.ceil(volumeDepthKm / stepKm)));
+    // Use lodMultiplier effectively on step computation
+    const stepKm = Math.max(desiredStepKm, volumeDepthKm / maxShaderStepsCount);
+    const maxSteps = Math.max(32, Math.min(maxShaderStepsCount, Math.ceil(volumeDepthKm / stepKm)));
 
     uniforms.uStepKm.value = stepKm;
     uniforms.uMaxSteps.value = maxSteps;
-    uniforms.uMode.value = this.interpolationMode;
+    uniforms.uMode.value = isLow ? 0 : 1; // Nearest neighbor (0) on low quality, trilinear (1) on medium/high
     uniforms.uOpacityScale.value = 1.35;
     uniforms.uFuzz.value = 1;
     uniforms.uVolumeMin.value.copy(volumeMin);

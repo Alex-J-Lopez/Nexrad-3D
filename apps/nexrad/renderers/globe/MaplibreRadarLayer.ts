@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import maplibregl from "maplibre-gl";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
-import { RadarVolumeNode } from "../shared/radarVolumeNode";
+import { RadarVolumeNode, type RenderingQuality } from "../shared/radarVolumeNode";
 
 export class MaplibreRadarLayer implements maplibregl.CustomLayerInterface {
   public id = "radar-volume-layer";
@@ -28,13 +28,17 @@ export class MaplibreRadarLayer implements maplibregl.CustomLayerInterface {
     site: RadarSite,
     metadata: RadarVolumeMeta,
     data: Float32Array,
-    thresholdDbz: number
+    thresholdDbz: number,
+    quality: RenderingQuality = "high"
   ) {
     this.site = site;
+    this.radarNode.renderingQuality = quality;
     // Maplibre has a different approach but realistically maxTextureSize needs renderer 
     // let's pass a sensible default 8192 or dynamically fetch if renderer is bound
     const maxTextureSize = this.renderer ? this.renderer.capabilities.maxTextureSize : 8192;
-    this.radarNode.updateVolume(data, metadata, thresholdDbz, maxTextureSize);
+    // Potentially scale max texture size depending on quality as well
+    const effectiveMaxSize = quality === "low" ? Math.min(2048, maxTextureSize) : maxTextureSize;
+    this.radarNode.updateVolume(data, metadata, thresholdDbz, effectiveMaxSize);
     
     if (this.map) {
       this.map.triggerRepaint();
