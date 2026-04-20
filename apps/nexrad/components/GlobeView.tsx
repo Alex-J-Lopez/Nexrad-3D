@@ -5,6 +5,7 @@ import maplibregl from "maplibre-gl";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
 import { MaplibreRadarLayer } from "../renderers/globe/MaplibreRadarLayer";
 import type { RenderingQuality } from "../renderers/shared/radarVolumeNode";
+import { useFlightData } from "../hooks/useFlightData";
 
 export type MapStyle = "dark" | "light" | "satellite";
 
@@ -43,6 +44,7 @@ interface GlobeViewProps {
   thresholdDbz: number;
   renderingQuality?: RenderingQuality;
   mapStyle?: MapStyle;
+  showFlights?: boolean;
 }
 
 export function GlobeView({
@@ -55,11 +57,14 @@ export function GlobeView({
   thresholdDbz,
   renderingQuality = "high",
   mapStyle = "dark",
+  showFlights = false,
 }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const layerRef = useRef<MaplibreRadarLayer | null>(null);
   const [mapReady, setMapReady] = useState(false);
+
+  const { flights } = useFlightData(site, showFlights);
 
   const siteRef = useRef(site);
   siteRef.current = site;
@@ -261,8 +266,8 @@ export function GlobeView({
       return;
     }
 
-    layer.update(site, metadata, data, thresholdDbz, renderingQuality);
-  }, [site, metadata, data, thresholdDbz, renderingQuality]);
+    layer.update(site, metadata, data, thresholdDbz, renderingQuality, flights);
+  }, [site, metadata, data, thresholdDbz, renderingQuality, flights]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

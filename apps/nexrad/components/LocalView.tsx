@@ -33,6 +33,8 @@ function paintColorbar(canvas: HTMLCanvasElement): void {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+import { useFlightData } from "@/hooks/useFlightData";
+
 interface LocalViewProps {
   data: Float32Array | null;
   metadata: RadarVolumeMeta | null;
@@ -42,6 +44,7 @@ interface LocalViewProps {
   onThresholdChange: (value: number) => void;
   /** When false, threshold slider is omitted (e.g. threshold lives in header for globe view). */
   showThresholdControls?: boolean;
+  showFlights?: boolean;
 }
 
 export function LocalView({
@@ -52,12 +55,15 @@ export function LocalView({
   renderingQuality = "high",
   onThresholdChange,
   showThresholdControls = true,
+  showFlights = false,
 }: LocalViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const colorbarRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<VolumeRayMarchRenderer | null>(null);
   const [spinning, setSpinning] = useState(false);
   const [voxelCount, setVoxelCount] = useState(0);
+
+  const { flights } = useFlightData(site, showFlights);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -96,6 +102,12 @@ export function LocalView({
     const count = rendererRef.current?.updateVolume(data, metadata, thresholdDbz, renderingQuality) ?? 0;
     setVoxelCount(count);
   }, [data, metadata, thresholdDbz, renderingQuality]);
+
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.updateFlights(flights, site);
+    }
+  }, [flights, site]);
 
   const handleToggleSpin = useCallback(() => {
     if (!rendererRef.current) return;

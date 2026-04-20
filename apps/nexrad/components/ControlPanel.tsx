@@ -36,6 +36,8 @@ interface ControlPanelProps {
   onRenderingQualityChange: (quality: RenderingQuality) => void;
   mapStyle: MapStyle;
   onMapStyleChange: (style: MapStyle) => void;
+  showFlights: boolean;
+  onShowFlightsChange: (show: boolean) => void;
 }
 
 function formatTimestamp(timestampMs?: number): string {
@@ -72,6 +74,8 @@ export function ControlPanel(props: ControlPanelProps) {
     onRenderingQualityChange,
     mapStyle,
     onMapStyleChange,
+    showFlights,
+    onShowFlightsChange,
   } = props;
 
   const maxTimelineIndex = Math.max(timeline.length - 1, 0);
@@ -237,6 +241,17 @@ export function ControlPanel(props: ControlPanelProps) {
             </select>
           </label>
         )}
+
+        <label className="control-field control-row">
+          <span className="control-label">Air Traffic</span>
+          <input
+            type="checkbox"
+            className="control-checkbox"
+            checked={showFlights}
+            onChange={(e) => onShowFlightsChange(e.target.checked)}
+          />
+        </label>
+
         {displayMode === "globe" ? (
           <label className="control-field">
             <span className="control-label">Threshold ({thresholdDbz} dBZ)</span>
