@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
 import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
+import type { MapStyle } from "./GlobeView";
 
 export type RadarDisplayMode = "globe" | "local";
 
@@ -33,6 +34,8 @@ interface ControlPanelProps {
   volumeSweepCount: number;
   renderingQuality: RenderingQuality;
   onRenderingQualityChange: (quality: RenderingQuality) => void;
+  mapStyle: MapStyle;
+  onMapStyleChange: (style: MapStyle) => void;
 }
 
 function formatTimestamp(timestampMs?: number): string {
@@ -67,6 +70,8 @@ export function ControlPanel(props: ControlPanelProps) {
     volumeSweepCount,
     renderingQuality,
     onRenderingQualityChange,
+    mapStyle,
+    onMapStyleChange,
   } = props;
 
   const maxTimelineIndex = Math.max(timeline.length - 1, 0);
@@ -206,7 +211,22 @@ export function ControlPanel(props: ControlPanelProps) {
             <option value="local">Local 3D</option>
           </select>
         </label>
-
+        {displayMode === "globe" && (
+          <label className="control-field">
+            <span className="control-label">Map Style</span>
+            <select
+              className="control-input"
+              value={mapStyle}
+              onChange={(event) => {
+                onMapStyleChange(event.target.value as MapStyle);
+              }}
+            >
+              <option value="dark">Dark Matter</option>
+              <option value="light">Positron</option>
+              <option value="satellite">Satellite</option>
+            </select>
+          </label>
+        )}
         {displayMode === "globe" ? (
           <label className="control-field">
             <span className="control-label">Threshold ({thresholdDbz} dBZ)</span>

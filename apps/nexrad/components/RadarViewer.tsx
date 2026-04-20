@@ -20,6 +20,8 @@ import { loadVolumeArtifact } from "@/renderers/shared/volumeLoader";
 import { buildVolumeSweepSubset } from "@/renderers/shared/volumeSweepSubset";
 import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
 
+import type { MapStyle } from "./GlobeView";
+
 // Dynamic imports with ssr: false for WebGL components
 const GlobeView = dynamic(
   () => import("./GlobeView").then((m) => ({ default: m.GlobeView })),
@@ -63,6 +65,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
     source: "artifact" | "synthetic";
   } | null>(null);
   const [thresholdDbz, setThresholdDbz] = useState(15);
+  const [mapStyle, setMapStyle] = useState<MapStyle>("dark");
   const [visibleLowestTiltCount, setVisibleLowestTiltCount] =
     useState<VisibleLowestTiltCount>("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -97,6 +100,41 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
       setRenderingQuality("medium");
     }
   }, []);
+
+  // Load preferences from local storage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedSiteId = localStorage.getItem("nexrad_selectedSiteId");
+      if (storedSiteId) {
+        setSelectedSiteId(storedSiteId);
+      }
+      
+      const storedProduct = localStorage.getItem("nexrad_selectedProduct") as VolumeProduct;
+      if (storedProduct && Object.values(VolumeProduct).includes(storedProduct)) {
+        setSelectedProduct(storedProduct);
+      }
+      
+      const storedThreshold = localStorage.getItem("nexrad_thresholdDbz");
+      if (storedThreshold && !isNaN(Number(storedThreshold))) {
+        setThresholdDbz(Number(storedThreshold));
+      }
+      
+      const storedMapStyle = localStorage.getItem("nexrad_mapStyle") as MapStyle;
+      if (storedMapStyle) {
+        setMapStyle(storedMapStyle);
+      }
+    }
+  }, []);
+
+  // Save preferences to local storage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (selectedSiteId) localStorage.setItem("nexrad_selectedSiteId", selectedSiteId);
+      localStorage.setItem("nexrad_selectedProduct", selectedProduct);
+      localStorage.setItem("nexrad_thresholdDbz", thresholdDbz.toString());
+      localStorage.setItem("nexrad_mapStyle", mapStyle);
+    }
+  }, [selectedSiteId, selectedProduct, thresholdDbz, mapStyle]);
 
   useEffect(() => {
     if (!selectedSiteId && sites.length > 0) {
@@ -343,6 +381,8 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
             volumeSweepCount={activeVolume?.sweeps.length ?? 0}
             renderingQuality={renderingQuality}
             onRenderingQualityChange={setRenderingQuality}
+            mapStyle={mapStyle}
+            onMapStyleChange={setMapStyle}
           />
         </aside>
 
@@ -399,6 +439,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
                 data={renderedVolume?.data ?? null}
                 thresholdDbz={thresholdDbz}
                 renderingQuality={renderingQuality}
+                mapStyle={mapStyle}
               />
             )}
           </div>
