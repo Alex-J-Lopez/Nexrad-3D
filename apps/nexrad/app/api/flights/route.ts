@@ -10,20 +10,69 @@ export interface FlightData {
   heading: number; // degrees
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const lamin = searchParams.get("lamin");
-  const lomin = searchParams.get("lomin");
-  const lamax = searchParams.get("lamax");
-  const lomax = searchParams.get("lomax");
+function parseBoundingBox(searchParams: URLSearchParams) {
+  const laminRaw = searchParams.get("lamin");
+  const lominRaw = searchParams.get("lomin");
+  const lamaxRaw = searchParams.get("lamax");
+  const lomaxRaw = searchParams.get("lomax");
 
-  if (!lamin || !lomin || !lamax || !lomax) {
-    return NextResponse.json(
-      { error: "Missing required bounding box parameters: lamin, lomin, lamax, lomax" },
-      { status: 400 }
-    );
+  if (!laminRaw || !lominRaw || !lamaxRaw || !lomaxRaw) {
+    return {
+      error: "Missing required bounding box parameters: lamin, lomin, lamax, lomax",
+    };
   }
 
+  const lamin = Number(laminRaw);
+  const lomin = Number(lominRaw);
+  const lamax = Number(lamaxRaw);
+  const lomax = Number(lomaxRaw);
+
+  if (
+    !Number.isFinite(lamin) ||
+    !Number.isFinite(lomin) ||
+    !Number.isFinite(lamax) ||
+    !Number.isFinite(lomax)
+  ) {
+    return {
+      error: "Bounding box parameters must be finite numbers",
+    };
+  }
+
+  if (lamin < -90 || lamin > 90 || lamax < -90 || lamax > 90) {
+    return {
+      error: "Latitude parameters must be between -90 and 90",
+    };
+  }
+
+  if (lomin < -180 || lomin > 180 || lomax < -180 || lomax > 180) {
+    return {
+      error: "Longitude parameters must be between -180 and 180",
+    };
+  }
+
+  if (lamin >= lamax || lomin >= lomax) {
+    return {
+      error: "Bounding box parameters must satisfy lamin < lamax and lomin < lomax",
+    };
+  }
+
+  return {
+    lamin,
+    lomin,
+    lamax,
+    lomax,
+  };
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const bbox = parseBoundingBox(searchParams);
+
+  if ("error" in bbox) {
+    return NextResponse.json({ error: bbox.error }, { status: 400 });
+  }
+
+  const { lamin, lomin, lamax, lomax } = bbox;
   try {
     const response = await fetch(
       `https://opensky-network.org/api/states/all?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`,
