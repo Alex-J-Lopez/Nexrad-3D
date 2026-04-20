@@ -304,6 +304,9 @@ const persistVolumeMetadata = async (metadata: RadarVolumeMeta): Promise<void> =
     },
   ]);
 
+  const thresholdTime = Date.now() - (15 * 60 * 1000); // 15 minutes
+  await redis.zRemRangeByScore(timelineKey, "-inf", thresholdTime);
+
   const entryCount = await redis.zCard(timelineKey);
   if (entryCount > timelineLimit) {
     await redis.zRemRangeByRank(timelineKey, 0, entryCount - timelineLimit - 1);

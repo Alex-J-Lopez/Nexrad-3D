@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
 import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
+import type { MapStyle } from "./GlobeView";
 
 export type RadarDisplayMode = "globe" | "local";
 
@@ -33,6 +34,8 @@ interface ControlPanelProps {
   volumeSweepCount: number;
   renderingQuality: RenderingQuality;
   onRenderingQualityChange: (quality: RenderingQuality) => void;
+  mapStyle: MapStyle;
+  onMapStyleChange: (style: MapStyle) => void;
 }
 
 function formatTimestamp(timestampMs?: number): string {
@@ -67,6 +70,8 @@ export function ControlPanel(props: ControlPanelProps) {
     volumeSweepCount,
     renderingQuality,
     onRenderingQualityChange,
+    mapStyle,
+    onMapStyleChange,
   } = props;
 
   const maxTimelineIndex = Math.max(timeline.length - 1, 0);
@@ -109,7 +114,7 @@ export function ControlPanel(props: ControlPanelProps) {
             Measures the amount of energy returned to the radar. Higher values (warm colors like reds and purples) generally indicate heavier precipitation, such as heavy rain or hail, while lower values (cool colors like greens and blues) suggest light rain or snow.
           </p>
 
-          <h4>Velocity (VEL / VELD)</h4>
+          <h4>Velocity (VEL)</h4>
           <p>
             Measures the speed and direction of particles relative to the radar. Typically, green/blue colors mean wind/particles are moving <strong>toward</strong> the radar, while red/orange colors mean they are moving <strong>away</strong>. Where these colors tightly border each other, it can indicate rotation (mesocyclones).
           </p>
@@ -119,9 +124,19 @@ export function ControlPanel(props: ControlPanelProps) {
             Represents the variation in velocities within a given area. High spectrum width points to strong turbulence and diverse wind speeds (often found near severe weather boundaries or updrafts), whereas low spectrum width indicates uniform wind flow.
           </p>
 
-          <h4>Correlation Coefficient (CC)</h4>
+          <h4>Differential Reflectivity (ZDR)</h4>
+          <p>
+            A measure of the difference in returned energy between the horizontal and vertical sweeps of the radar. It helps identify the shape of targets. High positive values often indicate large, flat raindrops, while values near zero indicate spherical targets like hail.
+          </p>
+
+          <h4>Correlation Coefficient (RHO)</h4>
           <p>
             Measures how uniform the shape and size of radar targets are. Values near 1.0 (warm colors) indicate uniform targets like rain or snow. Lower values (cooler colors) suggest mixed targets such as birds, insects, ground clutter, or a mixture of rain, hail, and lofted tornadic debris (debris balls).
+          </p>
+
+          <h4>Differential Phase (PHIDP)</h4>
+          <p>
+            Measures the difference in the phase shift between the horizontal and vertical radar pulses as they pass through precipitation. It is particularly useful for estimating heavy rainfall amounts and mapping out areas of intense precipitation.
           </p>
         </div>
       </div>
@@ -206,7 +221,22 @@ export function ControlPanel(props: ControlPanelProps) {
             <option value="local">Local 3D</option>
           </select>
         </label>
-
+        {displayMode === "globe" && (
+          <label className="control-field">
+            <span className="control-label">Map Style</span>
+            <select
+              className="control-input"
+              value={mapStyle}
+              onChange={(event) => {
+                onMapStyleChange(event.target.value as MapStyle);
+              }}
+            >
+              <option value="dark">Dark Matter</option>
+              <option value="light">Positron</option>
+              <option value="satellite">Satellite</option>
+            </select>
+          </label>
+        )}
         {displayMode === "globe" ? (
           <label className="control-field">
             <span className="control-label">Threshold ({thresholdDbz} dBZ)</span>
