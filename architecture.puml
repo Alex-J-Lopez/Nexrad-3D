@@ -1,0 +1,70 @@
+@startuml Nexrad3D_Architecture
+!pragma layout smetana
+!theme plain
+skinparam componentStyle uml2
+skinparam packageStyle rectangle
+
+title Nexrad-3D System Architecture
+
+actor User
+
+cloud "NOAA AWS\n(S3 / SNS)" as NOAA_AWS
+
+package "Infrastructure (Docker Compose)" {
+  [Caddy\n(Reverse Proxy)] as Caddy
+  database "Redis (Cache & Events)" as Redis
+  database "Object Storage\n(S3/MinIO)" as Storage
+}
+
+package "Monorepo Packages" {
+  [contracts] as Contracts
+  [radar-colors] as RadarColors
+  [radar-parser] as RadarParser
+}
+
+package "services/ingest-worker" {
+  [Ingest Worker] as IngestWorker
+  note bottom of IngestWorker
+    Listens for NOAA updates,
+    processes Level II / ODIM data,
+    and stores standardized results.
+  end note
+}
+
+package "apps/nexrad (Next.js)" {
+  package "Frontend (React)" {
+    [UI Components\n(ControlPanel, StatusStrip)] as UI
+    [Radar Viewer\n(GlobeView, LocalView)] as Viewers
+    [Data Hooks\n(useRadarData)] as Hooks
+  }
+
+  package "Backend (API Routes)" {
+    [API Controllers\n(/data, /events, /volumes)] as API
+    [Service Libs\n(redis.ts, storage.ts)] as Libs
+  }
+}
+
+' External & User Flow
+NOAA_AWS -> IngestWorker : Raw Radar Data Stream
+User --> Caddy : HTTPS Web Traffic
+Caddy --> UI : Serves Next.js UI
+Caddy --> API : API Requests
+
+' Frontend Flow
+UI -> Viewers : Controls/Toggles
+Viewers -> Hooks : Triggers Data Fetch
+Hooks -> API : REST / SSE Calls
+Viewers ..> RadarColors : Uses for rendering
+
+' Web Backend Flow
+API -> Libs : Delegates tasks
+Libs --> Redis : Reads Metadata / PubSub Events
+Libs --> Storage : Retrieves processed volumes
+API ..> Contracts : Uses shared types
+
+' Worker Flow
+IngestWorker ..> RadarParser : Parses Level II Data
+IngestWorker --> Storage : Uploads processed chunks
+IngestWorker --> Redis : Updates state / Publishes events
+
+@enduml

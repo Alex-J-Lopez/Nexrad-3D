@@ -227,9 +227,6 @@ export function buildValueIndexTexture(metadata: RadarVolumeMeta, thresholdDbz: 
     case VolumeProduct.REFLECTIVITY:
       return buildReflectivityValueIndex(thresholdDbz);
     case VolumeProduct.VELOCITY:
-    case VolumeProduct.VELOCITY_DEALIASED:
-    case VolumeProduct.ROTATION:
-    case VolumeProduct.STORM_RELATIVE_VELOCITY:
       return buildVelocityValueIndex();
     case VolumeProduct.SPECTRUM_WIDTH:
       return buildSpectrumWidthValueIndex();

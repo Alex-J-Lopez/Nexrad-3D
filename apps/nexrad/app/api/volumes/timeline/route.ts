@@ -26,6 +26,11 @@ export async function GET(request: NextRequest) {
   try {
     const redis = getRedis();
     const timelineKey = `radar:timeline:${siteId}:${product}`;
+    
+    // Clean up expired items in Redis so the frontend strictly only gets the last 15 min
+    const thresholdTime = Date.now() - (15 * 60 * 1000);
+    await redis.zremrangebyscore(timelineKey, "-inf", thresholdTime);
+
     const volumeIds = await withTimeout(
       redis.zrange(timelineKey, 0, limit - 1, "REV"),
       REDIS_COMMAND_TIMEOUT_MS,

@@ -14,9 +14,6 @@ export enum VolumeProduct {
   DIFFERENTIAL_REFLECTIVITY = "ZDR",
   CORRELATION_COEFFICIENT = "RHO",
   DIFFERENTIAL_PHASE = "PHIDP",
-  VELOCITY_DEALIASED = "VELD",
-  ROTATION = "ROT",
-  STORM_RELATIVE_VELOCITY = "SRV",
 }
 
 /** Products the bundled NEXRAD Level-II decoder can extract when the moment exists in the file. */
@@ -55,13 +52,6 @@ export const VOLUME_PRODUCT_DEFINITIONS: VolumeProductDefinition[] = [
     product: VolumeProduct.DIFFERENTIAL_PHASE,
     label: "Differential phase (deg)",
     level2DecodedIngest: true,
-  },
-  { product: VolumeProduct.VELOCITY_DEALIASED, label: "Dealiased velocity", level2DecodedIngest: false },
-  { product: VolumeProduct.ROTATION, label: "Rotation", level2DecodedIngest: false },
-  {
-    product: VolumeProduct.STORM_RELATIVE_VELOCITY,
-    label: "Storm-relative velocity",
-    level2DecodedIngest: false,
   },
 ];
 

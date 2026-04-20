@@ -11,9 +11,9 @@ export interface MidwestRadarSiteDefinition {
 }
 
 export const MIDWEST_RADAR_SITES: MidwestRadarSiteDefinition[] = [
-  { id: "KARX", name: "La Crosse, WI", latitude: 43.9081, longitude: -91.1911, elevationMeters: 355 },
-  { id: "KGRB", name: "Green Bay, WI", latitude: 44.4986, longitude: -88.1111, elevationMeters: 210 },
-  { id: "KMKX", name: "Milwaukee, WI", latitude: 42.9679, longitude: -87.9046, elevationMeters: 214 },
+  { id: "KARX", name: "La Crosse, WI", latitude: 43.8227768, longitude: -91.1911087, elevationMeters: 355 },
+  { id: "KGRB", name: "Green Bay, WI", latitude: 44.4986343, longitude: -88.1111145, elevationMeters: 210 },
+  { id: "KMKX", name: "Milwaukee, WI", latitude: 42.9678993, longitude: -88.5506668, elevationMeters: 214 },
 ];
 
 /** Default `RADAR_SITES` when the env var is unset (comma-separated ICAO radar IDs). */
