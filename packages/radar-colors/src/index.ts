@@ -72,8 +72,6 @@ export function getColorIndexForProduct(product: VolumeProduct): ColorIndex {
     case "REF":
       return new ReflectivityColorIndex();
     case "VEL":
-    case "VELD":
-    case "SRV":
       return new VelocityColorIndex();
     default:
       return new ReflectivityColorIndex();
