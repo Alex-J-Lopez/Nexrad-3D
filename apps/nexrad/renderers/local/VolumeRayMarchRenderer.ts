@@ -204,7 +204,8 @@ export class VolumeRayMarchRenderer {
       // Calculate local km offset
       const dx = (flight.longitude - site.longitude) * rad * R * Math.cos(siteLatRad);
       const dz = -(flight.latitude - site.latitude) * rad * R;
-      const dy = (flight.altitude / 1000) * VERTICAL_SCALE;
+      const relativeAltitudeMeters = flight.altitude - (site.elevationMeters ?? 0);
+      const dy = (relativeAltitudeMeters / 1000) * VERTICAL_SCALE;
 
       positions[i * 3] = dx;
       positions[i * 3 + 1] = dy;
