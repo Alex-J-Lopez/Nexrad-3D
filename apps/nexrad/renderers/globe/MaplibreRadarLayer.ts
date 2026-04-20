@@ -2,6 +2,35 @@ import * as THREE from "three";
 import maplibregl from "maplibre-gl";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
 import { RadarVolumeNode, type RenderingQuality } from "../shared/radarVolumeNode";
+import type { FlightData } from "../../hooks/useFlightData";
+
+const VERTICAL_SCALE = 1;
+
+function createFlightLabelSprite(text: string, colorStr: string): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = "bold 28px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "rgba(0,0,0,0.8)";
+  ctx.strokeText(text, 128, 32);
+  ctx.fillStyle = colorStr;
+  ctx.fillText(text, 128, 32);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({ 
+    map: tex, 
+    transparent: true, 
+    depthTest: false,
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(8, 2, 1);
+  return sp;
+}
 
 export class MaplibreRadarLayer implements maplibregl.CustomLayerInterface {
   public id = "radar-volume-layer";
@@ -13,6 +42,7 @@ export class MaplibreRadarLayer implements maplibregl.CustomLayerInterface {
   private map: maplibregl.Map | null = null;
   private renderer: THREE.WebGLRenderer | null = null;
   private radarNode: RadarVolumeNode;
+  private flightsGroup: THREE.Group;
   
   private site: RadarSite | null = null;
 
@@ -22,6 +52,9 @@ export class MaplibreRadarLayer implements maplibregl.CustomLayerInterface {
     
     this.radarNode = new RadarVolumeNode();
     this.scene.add(this.radarNode.mesh);
+
+    this.flightsGroup = new THREE.Group();
+    this.scene.add(this.flightsGroup);
   }
 
   public update(
@@ -29,7 +62,8 @@ export class MaplibreRadarLayer implements maplibregl.CustomLayerInterface {
     metadata: RadarVolumeMeta,
     data: Float32Array,
     thresholdDbz: number,
-    quality: RenderingQuality = "high"
+    quality: RenderingQuality = "high",
+    flights?: FlightData[]
   ) {
     this.site = site;
     this.radarNode.renderingQuality = quality;
@@ -39,14 +73,115 @@ export class MaplibreRadarLayer implements maplibregl.CustomLayerInterface {
     // Potentially scale max texture size depending on quality as well
     const effectiveMaxSize = quality === "low" ? Math.min(2048, maxTextureSize) : maxTextureSize;
     this.radarNode.updateVolume(data, metadata, thresholdDbz, effectiveMaxSize);
+
+    this.updateFlights(flights || []);
     
     if (this.map) {
       this.map.triggerRepaint();
     }
   }
 
+  private updateFlights(flights: FlightData[]) {
+    // Clear old flights
+    while (this.flightsGroup.children.length > 0) {
+      const child = this.flightsGroup.children[0];
+      this.flightsGroup.remove(child);
+      if ((child as any).geometry) (child as any).geometry.dispose();
+      if ((child as any).material) {
+        if ((child as any).material.map) (child as any).material.map.dispose();
+        (child as any).material.dispose();
+      }
+    }
+
+    if (flights.length === 0 || !this.site) return;
+
+    const R = 6371; // Earth radius in km
+    const rad = Math.PI / 180;
+    const siteLatRad = this.site.latitude * rad;
+
+    const pointsGeo = new THREE.BufferGeometry();
+    const positions = new Float32Array(flights.length * 3);
+    const colors = new Float32Array(flights.length * 3);
+
+    // Also draw trails based on velocity and heading
+    const trailPositions: number[] = [];
+    const trailColors: number[] = [];
+
+    flights.forEach((flight, i) => {
+      // Calculate local km offset
+      const dx = (flight.longitude - this.site!.longitude) * rad * R * Math.cos(siteLatRad);
+      const dz = -(flight.latitude - this.site!.latitude) * rad * R;
+      const relativeAltitudeMeters = flight.altitude - this.site!.elevationMeters;
+      const dy = (relativeAltitudeMeters / 1000) * VERTICAL_SCALE;
+
+      positions[i * 3] = dx;
+      positions[i * 3 + 1] = dy;
+      positions[i * 3 + 2] = dz;
+
+      // Color based on altitude (e.g., higher = warmer color)
+      const color = new THREE.Color();
+      color.setHSL(Math.max(0, 0.7 - (flight.altitude / 12000) * 0.7), 1.0, 0.6);
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+
+      // Add a short trail indicating heading/velocity
+      // Velocity is m/s. Let's make the trail represent ~1 minute of flight (60 seconds)
+      // distance in km = velocity * 60 / 1000
+      if (flight.velocity > 0) {
+        const trailLengthKm = (flight.velocity * 60) / 1000;
+        // true_track is degrees clockwise from true north.
+        // Three.js (-Z is North, +X is East)
+        // North = 0 heading -> -Z
+        // East  = 90 heading -> +X
+        // South = 180 heading -> +Z
+        // West  = 270 heading -> -X
+        const headingRad = (90 - flight.heading) * rad;
+        const trailDx = Math.cos(headingRad) * trailLengthKm;
+        const trailDz = -Math.sin(headingRad) * trailLengthKm;
+
+        trailPositions.push(dx, dy, dz);
+        trailPositions.push(dx - trailDx, dy, dz - trailDz);
+
+        trailColors.push(color.r, color.g, color.b);
+        trailColors.push(color.r, color.g, color.b); // Fade out could be done here
+      }
+
+      const labelText = flight.callsign ? flight.callsign.trim() : flight.icao24;
+      const sprite = createFlightLabelSprite(labelText, `#${color.getHexString()}`);
+      sprite.position.set(dx, dy + 1.5, dz);
+      this.flightsGroup.add(sprite);
+    });
+
+    pointsGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    pointsGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+    const pointsMat = new THREE.PointsMaterial({
+      size: 4,
+      vertexColors: true,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.9,
+    });
+    this.flightsGroup.add(new THREE.Points(pointsGeo, pointsMat));
+
+    if (trailPositions.length > 0) {
+      const lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute("position", new THREE.Float32BufferAttribute(trailPositions, 3));
+      lineGeo.setAttribute("color", new THREE.Float32BufferAttribute(trailColors, 3));
+
+      const lineMat = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.5,
+      });
+      this.flightsGroup.add(new THREE.LineSegments(lineGeo, lineMat));
+    }
+  }
+
   public clear() {
     this.radarNode.clearVolume();
+    this.updateFlights([]);
     if (this.map) {
       this.map.triggerRepaint();
     }

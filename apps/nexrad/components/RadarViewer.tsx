@@ -70,6 +70,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
     useState<VisibleLowestTiltCount>("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [renderingQuality, setRenderingQuality] = useState<RenderingQuality>("high");
+  const [showFlights, setShowFlights] = useState(false);
 
   const {
     sites,
@@ -123,6 +124,11 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
       if (storedMapStyle) {
         setMapStyle(storedMapStyle);
       }
+
+      const storedShowFlights = localStorage.getItem("nexrad_showFlights");
+      if (storedShowFlights) {
+        setShowFlights(storedShowFlights === "true");
+      }
     }
   }, []);
 
@@ -133,8 +139,9 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
       localStorage.setItem("nexrad_selectedProduct", selectedProduct);
       localStorage.setItem("nexrad_thresholdDbz", thresholdDbz.toString());
       localStorage.setItem("nexrad_mapStyle", mapStyle);
+      localStorage.setItem("nexrad_showFlights", showFlights.toString());
     }
-  }, [selectedSiteId, selectedProduct, thresholdDbz, mapStyle]);
+  }, [selectedSiteId, selectedProduct, thresholdDbz, mapStyle, showFlights]);
 
   useEffect(() => {
     if (!selectedSiteId && sites.length > 0) {
@@ -383,6 +390,8 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
             onRenderingQualityChange={setRenderingQuality}
             mapStyle={mapStyle}
             onMapStyleChange={setMapStyle}
+            showFlights={showFlights}
+            onShowFlightsChange={setShowFlights}
           />
         </aside>
 
@@ -428,6 +437,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
                 renderingQuality={renderingQuality}
                 onThresholdChange={setThresholdDbz}
                 showThresholdControls
+                showFlights={showFlights}
               />
             ) : (
               <GlobeView
@@ -440,6 +450,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
                 thresholdDbz={thresholdDbz}
                 renderingQuality={renderingQuality}
                 mapStyle={mapStyle}
+                showFlights={showFlights}
               />
             )}
           </div>

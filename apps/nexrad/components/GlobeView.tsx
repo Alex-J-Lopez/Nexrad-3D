@@ -5,6 +5,7 @@ import maplibregl from "maplibre-gl";
 import type { RadarSite, RadarVolumeMeta } from "@nexrad-3d/contracts";
 import { MaplibreRadarLayer } from "../renderers/globe/MaplibreRadarLayer";
 import type { RenderingQuality } from "../renderers/shared/radarVolumeNode";
+import { useFlightData } from "../hooks/useFlightData";
 
 export type MapStyle = "dark" | "light" | "satellite";
 
@@ -43,6 +44,7 @@ interface GlobeViewProps {
   thresholdDbz: number;
   renderingQuality?: RenderingQuality;
   mapStyle?: MapStyle;
+  showFlights?: boolean;
 }
 
 export function GlobeView({
@@ -55,11 +57,14 @@ export function GlobeView({
   thresholdDbz,
   renderingQuality = "high",
   mapStyle = "dark",
+  showFlights = false,
 }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const layerRef = useRef<MaplibreRadarLayer | null>(null);
   const [mapReady, setMapReady] = useState(false);
+
+  const { flights } = useFlightData(site, showFlights);
 
   const siteRef = useRef(site);
   siteRef.current = site;
@@ -112,10 +117,6 @@ export function GlobeView({
       setMapReady(true);
     });
 
-    map.on("click", (e) => {
-      // Basic picking
-    });
-
     mapRef.current = map;
 
     return () => {
@@ -153,6 +154,110 @@ export function GlobeView({
     );
   }, [mapStyle, mapReady]);
 
+  // Handle sites layers & data
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+
+    const sourceId = "radar-sites-source";
+    // We construct a GeoJSON FeatureCollection
+    const sourceData: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: mapSites.map((s) => {
+        // Use true hardware coordinates when rendering them
+        const isRenderedSite = s.id === site?.id;
+        const preciseLon = isRenderedSite ? site.longitude : s.longitude;
+        const preciseLat = isRenderedSite ? site.latitude : s.latitude;
+
+        return {
+          type: "Feature",
+          id: s.id,
+          properties: {
+            id: s.id,
+            name: s.name,
+            isSelected: s.id === selectedSiteId,
+          },
+          geometry: {
+            type: "Point",
+            coordinates: [preciseLon, preciseLat],
+          },
+        };
+      }),
+    };
+
+    if (map.getSource(sourceId)) {
+      (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(sourceData);
+    } else {
+      map.addSource(sourceId, {
+        type: "geojson",
+        data: sourceData,
+      });
+
+      // Halo/Stroke for selected site
+      map.addLayer({
+        id: "radar-sites-halo-layer",
+        type: "circle",
+        source: sourceId,
+        filter: ["==", ["get", "isSelected"], true],
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "transparent",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+          "circle-pitch-alignment": "map",
+        },
+      });
+
+      // Base circles for all sites
+      map.addLayer({
+        id: "radar-sites-layer",
+        type: "circle",
+        source: sourceId,
+        paint: {
+          "circle-radius": 5,
+          "circle-color": [
+            "case",
+            ["==", ["get", "isSelected"], true],
+            "#4ade80", // Greenish selected color
+            "#9ca3af", // Grayish default color
+          ],
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#000000",
+          "circle-pitch-alignment": "map",
+        },
+      });
+
+      // Click handler
+      map.on("mouseenter", "radar-sites-layer", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "radar-sites-layer", () => {
+        map.getCanvas().style.cursor = "";
+      });
+      map.on("click", "radar-sites-layer", (e) => {
+        if (e.features && e.features.length > 0) {
+          const clickedId = e.features[0].properties?.id;
+          if (clickedId && onSiteSelectRef.current) {
+            onSiteSelectRef.current(clickedId);
+          }
+        }
+      });
+    }
+  }, [mapSites, selectedSiteId, site, mapReady]);
+
+  // Fly to the newly selected site
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !site) return;
+    
+    if (site.id === selectedSiteId) {
+       mapRef.current.flyTo({
+         center: [site.longitude, site.latitude],
+         zoom: 7,
+         speed: 1.2,
+       });
+    }
+  }, [site, selectedSiteId, mapReady]);
+
   // Update radar layer when data changes
   useEffect(() => {
     const layer = layerRef.current;
@@ -161,8 +266,8 @@ export function GlobeView({
       return;
     }
 
-    layer.update(site, metadata, data, thresholdDbz, renderingQuality);
-  }, [site, metadata, data, thresholdDbz, renderingQuality]);
+    layer.update(site, metadata, data, thresholdDbz, renderingQuality, flights);
+  }, [site, metadata, data, thresholdDbz, renderingQuality, flights]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

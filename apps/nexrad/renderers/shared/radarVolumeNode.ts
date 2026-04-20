@@ -10,7 +10,7 @@ import {
 const RANGE_RING_RADII_KM = [50, 100, 150];
 const RING_SEGMENTS = 128;
 const BACKGROUND_COLOR = 0x070a12;
-const VERTICAL_SCALE = 3;
+const VERTICAL_SCALE = 1;
 const SHADER_MAX_STEPS = 512;
 
 const VERTEX_SHADER = `
