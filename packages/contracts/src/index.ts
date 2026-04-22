@@ -78,7 +78,7 @@ export interface RadarSite {
 }
 
 export type { MidwestRadarSiteDefinition } from "./midwestSites.js";
-export { DEFAULT_RADAR_SITES_CSV, MIDWEST_RADAR_SITES } from "./midwestSites.js";
+export { MIDWEST_RADAR_SITES } from "./midwestSites.js";
 
 export interface SweepInfo {
   sweepIndex: number;
