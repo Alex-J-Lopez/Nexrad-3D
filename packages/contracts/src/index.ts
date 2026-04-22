@@ -77,8 +77,8 @@ export interface RadarSite {
   lastVolumeAt?: number; // Unix timestamp ms
 }
 
-export type { MidwestRadarSiteDefinition } from "./midwestSites.js";
-export { DEFAULT_RADAR_SITES_CSV, MIDWEST_RADAR_SITES } from "./midwestSites.js";
+export type { RadarSiteDefinition } from "./sites.js";
+export { RADAR_SITES } from "./sites.js";
 
 export interface SweepInfo {
   sweepIndex: number;
