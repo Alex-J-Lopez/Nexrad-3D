@@ -20,7 +20,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
-  MIDWEST_RADAR_SITES,
+  RADAR_SITES,
   LEVEL2_DECODABLE_VOLUME_PRODUCTS,
   VolumeProduct,
   parseVolumeProduct,
@@ -35,7 +35,7 @@ const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 const noaaBaseUrl =
   process.env.NOAA_BASE_URL ||
   "https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2";
-const radarSites = MIDWEST_RADAR_SITES.map((site) => site.id);
+const radarSites = RADAR_SITES.map((site) => site.id);
 const pollIntervalSeconds = parseInt(
   process.env.POLL_INTERVAL_SECONDS || "30",
   10
