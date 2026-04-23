@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite, type TimelineFrame } from "@nexrad-3d/contracts";
+import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite } from "@nexrad-3d/contracts";
 import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
 import type { MapStyle } from "./GlobeView";
 
@@ -15,19 +15,14 @@ interface ControlPanelProps {
   sites: RadarSite[];
   selectedSiteId?: string;
   selectedProduct: VolumeProduct;
-  liveFollow: boolean;
   displayMode: RadarDisplayMode;
   onDisplayModeChange: (mode: RadarDisplayMode) => void;
   thresholdDbz: number;
   onThresholdChange: (value: number) => void;
-  timeline: TimelineFrame[];
-  timelineIndex: number;
   activeGeneratedAtMs?: number;
   isRefreshing: boolean;
   onSiteChange: (siteId: string) => void;
   onProductChange: (product: VolumeProduct) => void;
-  onLiveFollowChange: (isEnabled: boolean) => void;
-  onTimelineIndexChange: (value: number) => void;
   onRefresh: () => void;
   visibleLowestTiltCount: VisibleLowestTiltCount;
   onVisibleLowestTiltCountChange: (value: VisibleLowestTiltCount) => void;
@@ -53,19 +48,14 @@ export function ControlPanel(props: ControlPanelProps) {
     sites,
     selectedSiteId,
     selectedProduct,
-    liveFollow,
     displayMode,
     onDisplayModeChange,
     thresholdDbz,
     onThresholdChange,
-    timeline,
-    timelineIndex,
     activeGeneratedAtMs,
     isRefreshing,
     onSiteChange,
     onProductChange,
-    onLiveFollowChange,
-    onTimelineIndexChange,
     onRefresh,
     visibleLowestTiltCount,
     onVisibleLowestTiltCountChange,
@@ -77,11 +67,6 @@ export function ControlPanel(props: ControlPanelProps) {
     showFlights,
     onShowFlightsChange,
   } = props;
-
-  const maxTimelineIndex = Math.max(timeline.length - 1, 0);
-  const normalizedTimelineIndex = Math.min(timelineIndex, maxTimelineIndex);
-  const selectedFrame = timeline[normalizedTimelineIndex];
-  const displayedTimestamp = selectedFrame?.generatedAtMs || activeGeneratedAtMs;
 
   const tiltSelectValue =
     visibleLowestTiltCount === "all" ? "all" : String(visibleLowestTiltCount);
@@ -323,35 +308,7 @@ export function ControlPanel(props: ControlPanelProps) {
       <div className="sidebar-section">
         <div className="sidebar-section-title">Time</div>
 
-        <label className="toggle-field" htmlFor="live-follow">
-          <input
-            id="live-follow"
-            type="checkbox"
-            checked={liveFollow}
-            onChange={(event) => {
-              onLiveFollowChange(event.target.checked);
-            }}
-          />
-          <span>Live follow (newest frame)</span>
-        </label>
-
-        <label className="control-field">
-          <span className="control-label">Timeline</span>
-          <input
-            className="control-input-range"
-            type="range"
-            min={0}
-            max={maxTimelineIndex}
-            step={1}
-            value={normalizedTimelineIndex}
-            disabled={timeline.length === 0}
-            onChange={(event) => {
-              onTimelineIndexChange(Number.parseInt(event.target.value, 10));
-            }}
-          />
-        </label>
-
-        <p className="sidebar-readout">{formatTimestamp(displayedTimestamp)}</p>
+        <p className="sidebar-readout">{formatTimestamp(activeGeneratedAtMs)}</p>
       </div>
     </div>
   );

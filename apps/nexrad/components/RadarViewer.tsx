@@ -51,8 +51,6 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
     VolumeProduct.REFLECTIVITY,
   );
   const [displayMode, setDisplayMode] = useState<RadarDisplayMode>("globe");
-  const [liveFollow, setLiveFollow] = useState(true);
-  const [timelineIndex, setTimelineIndex] = useState(0);
   const [activeVolume, setActiveVolume] = useState<RadarVolumeMeta | null>(
     null,
   );
@@ -74,13 +72,11 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
 
   const {
     sites,
-    timeline,
     latestVolume,
     isLoading,
     isRefreshing,
     error,
     refresh,
-    fetchVolumeById,
   } = useRadarData({
     siteId: selectedSiteId,
     product: selectedProduct,
@@ -94,7 +90,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   const selectedSiteRef = useRef(selectedSite);
   selectedSiteRef.current = selectedSite;
 
-  const activeTimestamp = activeVolume?.generatedAtMs;
+  const activeTimestamp = latestVolume?.generatedAtMs;
 
   useEffect(() => {
     if (typeof window !== "undefined" && /Mobi|Android/i.test(window.navigator.userAgent)) {
@@ -159,59 +155,12 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   }, [selectedSiteId, sites]);
 
   useEffect(() => {
-    if (liveFollow) {
-      setTimelineIndex(0);
+    if (!selectedSiteId) {
+      setActiveVolume(null);
       return;
     }
-
-    setTimelineIndex((prev) =>
-      Math.min(prev, Math.max(timeline.length - 1, 0)),
-    );
-  }, [liveFollow, timeline.length]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function resolveActiveVolume(): Promise<void> {
-      if (!selectedSiteId) {
-        setActiveVolume(null);
-        return;
-      }
-
-      // Index 0 is newest-in-timeline; use the latest endpoint result (may be fresher than frame metadata).
-      if (timelineIndex === 0) {
-        setActiveVolume(latestVolume);
-        return;
-      }
-
-      if (timeline.length === 0) {
-        setActiveVolume(latestVolume);
-        return;
-      }
-
-      const frame = timeline[Math.min(timelineIndex, timeline.length - 1)];
-      if (!frame) {
-        setActiveVolume(latestVolume);
-        return;
-      }
-
-      if (latestVolume && frame.volumeId === latestVolume.volumeId) {
-        setActiveVolume(latestVolume);
-        return;
-      }
-
-      const resolved = await fetchVolumeById(frame.volumeId);
-      if (!cancelled) {
-        setActiveVolume(resolved);
-      }
-    }
-
-    void resolveActiveVolume();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchVolumeById, latestVolume, selectedSiteId, timeline, timelineIndex]);
+    setActiveVolume(latestVolume || null);
+  }, [latestVolume, selectedSiteId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -358,27 +307,15 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
             sites={sites}
             selectedSiteId={selectedSiteId}
             selectedProduct={selectedProduct}
-            liveFollow={liveFollow}
             displayMode={displayMode}
             onDisplayModeChange={setDisplayMode}
             thresholdDbz={thresholdDbz}
             onThresholdChange={setThresholdDbz}
-            timeline={timeline}
-            timelineIndex={timelineIndex}
             activeGeneratedAtMs={activeTimestamp}
             isRefreshing={isRefreshing}
             onSiteChange={setSelectedSiteId}
             onProductChange={(next) => {
               setSelectedProduct(next);
-              setLiveFollow(true);
-              setTimelineIndex(0);
-            }}
-            onLiveFollowChange={setLiveFollow}
-            onTimelineIndexChange={(index) => {
-              setTimelineIndex(index);
-              if (index !== 0) {
-                setLiveFollow(false);
-              }
             }}
             onRefresh={() => {
               void refresh();
@@ -424,7 +361,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
             renderSource={renderSource}
             decodeStatusText={decodeStatusText}
             isApproximateDecode={isApproximateDecode}
-            frameCount={timeline.length}
+            frameCount={activeVolume ? 1 : 0}
           />
 
           <div className="main-view">

@@ -140,14 +140,6 @@ export function radarSiteForVolume(
   };
 }
 
-export interface TimelineFrame {
-  volumeId: string;
-  product: VolumeProduct;
-  generatedAtMs: number;
-  available: boolean; // Can be fetched immediately
-  storageKey?: string;
-}
-
 // ============================================
 // API Responses
 // ============================================
@@ -159,14 +151,6 @@ export interface GetSitesResponse {
 /** Latest volume for a site+product; `volume` is null when nothing is indexed yet (not an HTTP error). */
 export interface GetLatestVolumeResponse {
   volume: RadarVolumeMeta | null;
-}
-
-export interface GetTimelineResponse {
-  siteId: string;
-  product: VolumeProduct;
-  frames: TimelineFrame[];
-  oldestMs: number;
-  newestMs: number;
 }
 
 export interface GetVolumeProductsResponse {
