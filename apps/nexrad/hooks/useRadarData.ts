@@ -4,10 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   GetLatestVolumeResponse,
   GetSitesResponse,
-  GetTimelineResponse,
   RadarSite,
   RadarVolumeMeta,
-  TimelineFrame,
   VolumeProduct,
 } from "@nexrad-3d/contracts";
 
@@ -20,7 +18,6 @@ interface UseRadarDataOptions {
 
 export interface UseRadarDataResult {
   sites: RadarSite[];
-  timeline: TimelineFrame[];
   latestVolume: RadarVolumeMeta | null;
   isLoading: boolean;
   isRefreshing: boolean;
@@ -68,7 +65,6 @@ async function fetchJson<T>(path: string): Promise<T> {
 export function useRadarData(options: UseRadarDataOptions): UseRadarDataResult {
   const { siteId, product } = options;
   const [sites, setSites] = useState<RadarSite[]>([]);
-  const [timeline, setTimeline] = useState<TimelineFrame[]>([]);
   const [latestVolume, setLatestVolume] = useState<RadarVolumeMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -85,7 +81,6 @@ export function useRadarData(options: UseRadarDataOptions): UseRadarDataResult {
 
   const refresh = useCallback(async () => {
     if (!siteId) {
-      setTimeline([]);
       setLatestVolume(null);
       setIsLoading(false);
       return;
@@ -95,21 +90,14 @@ export function useRadarData(options: UseRadarDataOptions): UseRadarDataResult {
     setIsRefreshing(true);
 
     try {
-      const [latestPayload, timelinePayload] = await Promise.all([
-        fetchJson<GetLatestVolumeResponse>(
-          `/api/volumes/latest?siteId=${encodeURIComponent(siteId)}&product=${encodeURIComponent(product)}`
-        ),
-        fetchJson<GetTimelineResponse>(
-          `/api/volumes/timeline?siteId=${encodeURIComponent(siteId)}&product=${encodeURIComponent(product)}&limit=120`
-        ),
-      ]);
+      const latestPayload = await fetchJson<GetLatestVolumeResponse>(
+        `/api/volumes/latest?siteId=${encodeURIComponent(siteId)}&product=${encodeURIComponent(product)}`
+      );
 
       setLatestVolume(latestPayload.volume);
-      setTimeline(timelinePayload.frames);
     } catch (refreshError) {
       const message = getErrorMessage(refreshError);
       setError(message);
-      setTimeline([]);
       setLatestVolume(null);
     } finally {
       setIsRefreshing(false);
@@ -188,7 +176,6 @@ export function useRadarData(options: UseRadarDataOptions): UseRadarDataResult {
 
   return {
     sites,
-    timeline,
     latestVolume,
     isLoading,
     isRefreshing,

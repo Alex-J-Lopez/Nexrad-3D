@@ -15,12 +15,12 @@ import {
   CreateBucketCommand,
   HeadBucketCommand,
   PutObjectCommand,
-  ListObjectsV2Command,
-  DeleteObjectsCommand,
+  
+  
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
-  DEFAULT_RADAR_SITES_CSV,
+  RADAR_SITES,
   LEVEL2_DECODABLE_VOLUME_PRODUCTS,
   VolumeProduct,
   parseVolumeProduct,
@@ -35,13 +35,12 @@ const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 const noaaBaseUrl =
   process.env.NOAA_BASE_URL ||
   "https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2";
-const radarSites = (process.env.RADAR_SITES || DEFAULT_RADAR_SITES_CSV).split(",");
+const radarSites = RADAR_SITES.map((site) => site.id);
 const pollIntervalSeconds = parseInt(
   process.env.POLL_INTERVAL_SECONDS || "30",
   10
 );
 const maxFilesPerPoll = parseInt(process.env.INGEST_MAX_FILES_PER_POLL || "3", 10);
-const timelineLimit = parseInt(process.env.TIMELINE_LIMIT || "240", 10);
 
 /**
  * Parses the INGEST_PRODUCTS environment variable (a comma-separated string) 
@@ -288,7 +287,6 @@ const ensureBucketExists = async (): Promise<void> => {
 const persistVolumeMetadata = async (metadata: RadarVolumeMeta): Promise<void> => {
   const latestKey = `radar:latest:${metadata.siteId}:${metadata.product}`;
   const volumeKey = `radar:volume:${metadata.volumeId}`;
-  const timelineKey = `radar:timeline:${metadata.siteId}:${metadata.product}`;
   const metadataJson = JSON.stringify(metadata);
 
   await redis.set(latestKey, metadataJson, { EX: 60 * 60 * 24 * 2 });
@@ -296,21 +294,6 @@ const persistVolumeMetadata = async (metadata: RadarVolumeMeta): Promise<void> =
   await redis.set(`radar:site:lastVolumeAt:${metadata.siteId}`, String(metadata.generatedAtMs), {
     EX: 60 * 60 * 24 * 2,
   });
-
-  await redis.zAdd(timelineKey, [
-    {
-      score: metadata.generatedAtMs,
-      value: metadata.volumeId,
-    },
-  ]);
-
-  const thresholdTime = Date.now() - (15 * 60 * 1000); // 15 minutes
-  await redis.zRemRangeByScore(timelineKey, "-inf", thresholdTime);
-
-  const entryCount = await redis.zCard(timelineKey);
-  if (entryCount > timelineLimit) {
-    await redis.zRemRangeByRank(timelineKey, 0, entryCount - timelineLimit - 1);
-  }
 }
 
 /**
@@ -355,7 +338,7 @@ const processRadarFile = async (siteId: string, filename: string): Promise<void>
   }
 
   const generatedAtMs = parseNexradGeneratedAtMs(filename) ?? Date.now();
-  const rawStorageKey = `${siteId}/${generatedAtMs}/${filename}`;
+  const rawStorageKey = `${siteId}/latest/raw`;
   await uploadObject(rawStorageKey, sourceBuffer, "application/octet-stream");
 
   const ingestProducts = parseIngestProductList();
@@ -369,7 +352,7 @@ const processRadarFile = async (siteId: string, filename: string): Promise<void>
         generatedAtMs,
       });
 
-      const parsedStorageKey = `${siteId}/${generatedAtMs}/${product}.f32`;
+      const parsedStorageKey = `${siteId}/latest/${product}.f32`;
       const parsedVolumeBytes = new Uint8Array(
         artifact.data.buffer,
         artifact.data.byteOffset,
@@ -483,59 +466,6 @@ const pollRadarSite = async (siteId: string): Promise<void> => {
   }
 }
 
-const MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
-
-/**
- * Sweeps objects on the MinIO bucket ensuring the persistent drive is not filled beyond
- * a 15-minute timeframe. Useful on cloud hosts maintaining tight 50GB storage.
- */
-const cleanupOldObjects = async () => {
-  if (!objectStorageEnabled) return;
-
-  const thresholdTime = Date.now() - MAX_AGE_MS;
-  let continuationToken: string | undefined;
-
-  try {
-    do {
-      const response = await s3.send(
-        new ListObjectsV2Command({
-          Bucket: minioBucket,
-          ContinuationToken: continuationToken,
-        })
-      );
-
-      if (!response.Contents || response.Contents.length === 0) break;
-
-      const objectsToDelete = response.Contents.map((obj) => {
-        const lastModified = obj.LastModified ? obj.LastModified.getTime() : 0;
-        return { Key: obj.Key, age: lastModified };
-      })
-      .filter((obj) => obj.age > 0 && obj.age < thresholdTime && obj.Key)
-      .map((obj) => ({ Key: obj.Key as string }));
-
-      if (objectsToDelete.length > 0) {
-        await s3.send(
-          new DeleteObjectsCommand({
-            Bucket: minioBucket,
-            Delete: { Objects: objectsToDelete, Quiet: true },
-          })
-        );
-        console.log(`🧹 Cleaned up ${objectsToDelete.length} stale objects older than 15 minutes.`);
-      }
-
-      continuationToken = response.NextContinuationToken;
-    } while (continuationToken);
-  } catch (error) {
-    console.error("Cleanup failed:", error);
-  }
-}
-
-/**
- * Ingestion Worker Execution Point
- * Binds environment endpoints, kicks off S3 validation,
- * instantiates asynchronous polling timers per desired tracking station interval,
- * and maintains continuous periodic cleanup iterations via independent thread spans.
- */
 const main = async () => {
   try {
     await redis.connect();
@@ -545,28 +475,21 @@ const main = async () => {
       console.log(`Object storage enabled at ${minioEndpoint} (bucket: ${minioBucket})`);
       await ensureBucketExists();
 
-      // Add a scheduled task to clean up old items every 60 seconds
-      setInterval(() => {
-        void cleanupOldObjects();
-      }, 60 * 1000);
     } else {
       console.log("Object storage disabled by OBJECT_STORAGE_ENABLED=false");
     }
 
-    // Poll each site on interval
-    for (const siteId of radarSites.map((value) => value.trim()).filter(Boolean)) {
-      setInterval(() => {
-        void pollRadarSite(siteId);
-      }, pollIntervalSeconds * 1000);
-
-      // Poll immediately on startup
-      await pollRadarSite(siteId);
-    }
-
     const productList = parseIngestProductList().join(", ");
     console.log(
-      `Ingestion worker started. Polling ${radarSites.join(", ")} every ${pollIntervalSeconds}s; products: ${productList}`
+      `Ingestion worker started. Polling ${radarSites.join(", ")} continuously; products: ${productList}`
     );
+
+    const validSites = radarSites.map((value) => value.trim()).filter(Boolean);
+    while (true) {
+      for (const siteId of validSites) {
+        await pollRadarSite(siteId);
+      }
+    }
   } catch (err) {
     console.error("Ingestion worker failed:", err);
     process.exit(1);
