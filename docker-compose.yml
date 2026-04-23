@@ -30,7 +30,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio-data:/data
+      - ${MINIO_DATA_PATH:-minio-data}:/data
 
   minio-init:
     image: minio/mc:latest
