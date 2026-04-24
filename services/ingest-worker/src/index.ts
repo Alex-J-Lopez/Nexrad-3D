@@ -424,9 +424,10 @@ const pollRadarSite = async (siteId: string): Promise<void> => {
     const filesToProcess = selectFilesToProcess(availableFiles, lastProcessedFile);
 
     for (const filename of filesToProcess) {
-      console.log(`Ingesting ${normalizedSiteId}/${filename}`);
+      console.log(`[${new Date().toISOString()}] Ingesting ${normalizedSiteId}/${filename}`);
       await processRadarFile(normalizedSiteId, filename);
       await redis.set(lastProcessedKey, filename, { EX: 60 * 60 * 24 * 7 });
+      console.log(`[${new Date().toISOString()}] Successfully ingested ${normalizedSiteId}/${filename}`);
     }
 
     await writeState({

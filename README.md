@@ -39,3 +39,39 @@ If you prefer to run the Node/Next.js services locally for development:
    npm run dev
    ```
 5. Open frontend at http://localhost:3000.
+
+## MinIO Storage Path
+
+The Docker Compose setup supports both local development and production by using:
+
+```yaml
+${MINIO_DATA_PATH:-minio-data}
+```
+
+This means:
+
+- If `MINIO_DATA_PATH` is not set, Docker uses the named volume `minio-data` (best for local dev).
+- If `MINIO_DATA_PATH` is set, Docker bind-mounts that host path into MinIO at `/data`.
+
+### Local Development (default)
+
+No extra config is required. Leave `MINIO_DATA_PATH` unset and run:
+
+```bash
+npm run infra:up
+```
+
+### Other environments where you want to specify minio data volume location
+
+1. Start Compose with the variable set:
+   ```bash
+   export MINIO_DATA_PATH=/mt/sdb1/minio-data
+   npm run infra:up
+   ```
+
+Alternative using an env file on the VM:
+
+```bash
+echo "MINIO_DATA_PATH=/mt/sdb1/minio-data" > .env.production
+docker compose --env-file .env.production up -d
+```
