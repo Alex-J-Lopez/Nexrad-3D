@@ -15,7 +15,9 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "infra:up": "docker compose up -d",
+    "proxy:up": "docker network create nexrad_net || true && docker compose -f docker-compose.proxy.yml up -d",
+    "proxy:down": "docker compose -f docker-compose.proxy.yml down",
+    "infra:up": "docker network create nexrad_net || true && docker compose up -d",
     "infra:down": "docker compose down -v"
   },
   "devDependencies": {
