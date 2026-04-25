@@ -15,8 +15,7 @@ import {
   CreateBucketCommand,
   HeadBucketCommand,
   PutObjectCommand,
-  
-  
+  ListObjectsV2Command,
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
@@ -425,9 +424,19 @@ const pollRadarSite = async (siteId: string): Promise<void> => {
 
     for (const filename of filesToProcess) {
       console.log(`[${new Date().toISOString()}] Ingesting ${normalizedSiteId}/${filename}`);
+      const t0 = Date.now();
       await processRadarFile(normalizedSiteId, filename);
+      const t1 = Date.now();
+      
+      const timingKey = "ingestion:metrics:timing";
+      const existingAvgStr = await redis.hGet(timingKey, normalizedSiteId);
+      const currentAvg = existingAvgStr ? parseFloat(existingAvgStr) : 0;
+      const duration = t1 - t0;
+      const newAvg = currentAvg === 0 ? duration : currentAvg * 0.9 + duration * 0.1;
+      await redis.hSet(timingKey, normalizedSiteId, String(newAvg));
+
       await redis.set(lastProcessedKey, filename, { EX: 60 * 60 * 24 * 7 });
-      console.log(`[${new Date().toISOString()}] Successfully ingested ${normalizedSiteId}/${filename}`);
+      console.log(`[${new Date().toISOString()}] Successfully ingested ${normalizedSiteId}/${filename} in ${duration}ms`);
     }
 
     await writeState({
@@ -467,6 +476,27 @@ const pollRadarSite = async (siteId: string): Promise<void> => {
   }
 }
 
+const updateS3MetricsSize = async () => {
+  try {
+    let size = 0;
+    let continuationToken: string | undefined = undefined;
+    do {
+      const resp: any = await s3.send(new ListObjectsV2Command({
+        Bucket: minioBucket,
+        ContinuationToken: continuationToken,
+      }));
+      for (const obj of (resp.Contents || [])) {
+        size += obj.Size || 0;
+      }
+      continuationToken = resp.NextContinuationToken;
+    } while (continuationToken);
+
+    await redis.set("ingestion:metrics:s3_size", String(size));
+  } catch (error) {
+    console.error("Failed to fetch S3 metrics size", error);
+  }
+};
+
 const main = async () => {
   try {
     await redis.connect();
@@ -475,7 +505,8 @@ const main = async () => {
     if (objectStorageEnabled) {
       console.log(`Object storage enabled at ${minioEndpoint} (bucket: ${minioBucket})`);
       await ensureBucketExists();
-
+      updateS3MetricsSize();
+      setInterval(updateS3MetricsSize, 60000 * 5); // Run every 5 mins
     } else {
       console.log("Object storage disabled by OBJECT_STORAGE_ENABLED=false");
     }
