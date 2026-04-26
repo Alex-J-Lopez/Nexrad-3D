@@ -298,10 +298,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
               </button>
             </div>
             <p className="sidebar-tagline">
-              Volumetric radar — globe or local 3D<br/>
-              <Link href="/info" className="info-link">How it works</Link>
-              <span style={{ margin: "0 8px", color: "gray" }}>|</span>
-              <Link href="/health" className="info-link">Health Dashboard</Link>
+              Configure ingest sources, display modes, and quality controls.
             </p>
           </div>
 
@@ -335,29 +332,41 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
         </aside>
 
         <div className="app-main">
-          <div className="mobile-header">
-            <button
-              className="mobile-sidebar-toggle"
-              onClick={() => setIsSidebarOpen(true)}
-              aria-label="Open controls"
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+          <header className="viewer-header">
+            <div className="viewer-header-left">
+              <button
+                className="mobile-sidebar-toggle"
+                onClick={() => setIsSidebarOpen(true)}
+                aria-label="Open controls"
               >
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-              </svg>
-            </button>
-            <span className="mobile-header-title">Nexrad 3D</span>
-          </div>
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+              </button>
+              <div>
+                <h2 className="viewer-title">Radar Viewer</h2>
+                <p className="viewer-subtitle">
+                  Volumetric NEXRAD rendering in globe and local 3D modes.
+                </p>
+              </div>
+            </div>
+            <div className="viewer-header-actions">
+              <Link href="/info" className="viewer-link">How It Works</Link>
+              <Link href="/health" className="viewer-link">Health Dashboard</Link>
+            </div>
+          </header>
+
           <StatusStrip
             statusText={statusText}
             renderSource={renderSource}
