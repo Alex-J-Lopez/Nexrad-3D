@@ -506,7 +506,7 @@ const main = async () => {
       console.log(`Object storage enabled at ${minioEndpoint} (bucket: ${minioBucket})`);
       await ensureBucketExists();
       updateS3MetricsSize();
-      setInterval(updateS3MetricsSize, 60000 * 5); // Run every 5 mins
+      setInterval(updateS3MetricsSize, 30000); // Run every 30s
     } else {
       console.log("Object storage disabled by OBJECT_STORAGE_ENABLED=false");
     }

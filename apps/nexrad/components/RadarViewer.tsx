@@ -300,6 +300,8 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
             <p className="sidebar-tagline">
               Volumetric radar — globe or local 3D<br/>
               <Link href="/info" className="info-link">How it works</Link>
+              <span style={{ margin: "0 8px", color: "gray" }}>|</span>
+              <Link href="/health" className="info-link">Health Dashboard</Link>
             </p>
           </div>
 
