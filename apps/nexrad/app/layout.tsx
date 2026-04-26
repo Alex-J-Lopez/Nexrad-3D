@@ -4,6 +4,22 @@ import "../styles/globals.css";
 export const metadata: Metadata = {
   title: "Nexrad 3D",
   description: "Volumetric radar — globe or local 3D",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-icon" }],
+  },
+  openGraph: {
+    title: "Nexrad 3D",
+    description: "Volumetric radar — globe or local 3D",
+    images: ["/opengraph-image"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Nexrad 3D",
+    description: "Volumetric radar — globe or local 3D",
+    images: ["/twitter-image"],
+  },
 };
 
 export const viewport: Viewport = {

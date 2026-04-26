@@ -54,10 +54,7 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
   const [activeVolume, setActiveVolume] = useState<RadarVolumeMeta | null>(
     null,
   );
-  const [renderSource, setRenderSource] = useState<
-    "artifact" | "synthetic" | null
-  >(null);
-  const [renderError, setRenderError] = useState<string | null>(null);
+
   const [loadedVolumeData, setLoadedVolumeData] = useState<{
     data: Float32Array;
     source: "artifact" | "synthetic";
@@ -174,13 +171,9 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
         const loaded = await loadVolumeArtifact(activeVolume);
         if (!cancelled) {
           setLoadedVolumeData({ data: loaded.data, source: loaded.source });
-          setRenderSource(loaded.source);
-          setRenderError(null);
         }
       } catch (err) {
-        if (!cancelled) {
-          setRenderError(err instanceof Error ? err.message : String(err));
-        }
+        // Error loading volume - silently fail
       }
     }
 
@@ -219,45 +212,6 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
     () => radarSiteForVolume(selectedSite, volumeMetaForPlacement),
     [selectedSite, volumeMetaForPlacement],
   );
-
-  const statusText = useMemo(() => {
-    if (renderError) {
-      return renderError;
-    }
-
-    if (error) {
-      return error;
-    }
-
-    if (isLoading) {
-      return "Loading radar state";
-    }
-
-    if (!activeVolume) {
-      return "Waiting for radar volume";
-    }
-
-    return "Rendering volume preview";
-  }, [activeVolume, error, isLoading, renderError]);
-
-  const decodeMode = activeVolume?.decodeMode;
-  const isApproximateDecode = decodeMode === "bootstrap-byte-map";
-
-  const decodeStatusText = useMemo(() => {
-    if (!activeVolume) {
-      return "Decode: waiting for volume";
-    }
-
-    if (decodeMode === "bootstrap-byte-map") {
-      return "Decode: approximate byte map (full radial decode unavailable for this file/product)";
-    }
-
-    if (decodeMode === "decoded") {
-      return "Decode: full radial decode";
-    }
-
-    return "Decode: full radial decode";
-  }, [activeVolume, decodeMode]);
 
   return (
     <div className="app">
@@ -366,14 +320,6 @@ export function RadarViewer({ initialSites: _initialSites }: RadarViewerProps) {
               <Link href="/health" className="viewer-link">Health Dashboard</Link>
             </div>
           </header>
-
-          <StatusStrip
-            statusText={statusText}
-            renderSource={renderSource}
-            decodeStatusText={decodeStatusText}
-            isApproximateDecode={isApproximateDecode}
-            frameCount={activeVolume ? 1 : 0}
-          />
 
           <div className="main-view">
             {displayMode === "local" ? (
