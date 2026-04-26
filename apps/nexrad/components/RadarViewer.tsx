@@ -14,7 +14,6 @@ import {
   type RadarDisplayMode,
   type VisibleLowestTiltCount,
 } from "./ControlPanel";
-import { StatusStrip } from "./StatusStrip";
 import { useRadarData } from "@/hooks/useRadarData";
 import { loadVolumeArtifact } from "@/renderers/shared/volumeLoader";
 import { buildVolumeSweepSubset } from "@/renderers/shared/volumeSweepSubset";
