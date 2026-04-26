@@ -1,0 +1,23 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: nexrad-3d-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - nexrad_net
+    restart: unless-stopped
+
+networks:
+  nexrad_net:
+    name: nexrad_net
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:
