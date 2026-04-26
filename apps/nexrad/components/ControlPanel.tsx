@@ -3,10 +3,46 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { VolumeProduct, VOLUME_PRODUCT_DEFINITIONS, type RadarSite } from "@nexrad-3d/contracts";
+import { getColorIndexForProduct } from "@nexrad-3d/radar-colors";
 import type { RenderingQuality } from "@/renderers/shared/radarVolumeNode";
 import type { MapStyle } from "./GlobeView";
 
 export type RadarDisplayMode = "globe" | "local";
+
+function ColorLegend({ product }: { product: VolumeProduct }) {
+  const colorIndex = getColorIndexForProduct(product);
+  // Using generic min/max for the standard legend ranges usually
+  // Reflectivity is typically -10 to 80 dBZ, Velocity is -30 to +30 m/s
+  const min = product === "VEL" ? -30 : -10;
+  const max = product === "VEL" ? 30 : 80;
+  
+  const legendData = colorIndex.getLegendData(min, max);
+
+  return (
+    <div className="color-legend">
+      <div
+        className="color-legend-gradient"
+        style={{ background: legendData.gradientCss, height: "12px", borderRadius: "4px", position: "relative" }}
+      />
+      <div className="color-legend-ticks" style={{ position: "relative", height: "20px", marginTop: "4px", fontSize: "11px", color: "#9ca3af" }}>
+        {legendData.ticks.map((tick, i) => (
+          <div
+            key={i}
+            className="color-legend-tick"
+            style={{
+              position: "absolute",
+              left: `${tick.positionPct * 100}%`,
+              transform: "translateX(-50%)",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {tick.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** How many lowest-elevation tilts to include, or full volume. */
 export type VisibleLowestTiltCount = number | "all";
@@ -157,7 +193,7 @@ export function ControlPanel(props: ControlPanelProps) {
           </select>
         </label>
 
-        <label className="control-field">
+        <label className="control-field" style={{ marginBottom: "20px" }}>
           <span className="control-label">
             Product
             <button 
@@ -182,6 +218,9 @@ export function ControlPanel(props: ControlPanelProps) {
               </option>
             ))}
           </select>
+          <div style={{ marginTop: "12px", width: "100%" }}>
+            <ColorLegend product={selectedProduct} />
+          </div>
         </label>
 
         <button
