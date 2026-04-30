@@ -30,6 +30,8 @@ import {
 import { getReaderForFile, parseNexradGeneratedAtMs } from "@nexrad-3d/radar-parser";
 import { createClient } from "redis";
 import { Worker } from "worker_threads";
+import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import path from "path";
 
 const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
@@ -104,10 +106,11 @@ const parseVolumeInWorker = async (
   product: VolumeProduct
 ): Promise<{ data: Uint8Array; metadata: any }> => {
   return new Promise((resolve, reject) => {
-    let workerFile = path.resolve(__dirname, "parse-worker.js");
-    // Fallback for ts-node / direct ts execution
-    if (!workerFile.endsWith('.js') && !require('fs').existsSync(workerFile)) {
-      workerFile = path.resolve(__dirname, "parse-worker.ts");
+    const workerDir = fileURLToPath(new URL('.', import.meta.url));
+    let workerFile = path.resolve(workerDir, "parse-worker.js");
+    // Fallback when the compiled .js file is missing (e.g. running via tsx/ts-node)
+    if (!existsSync(workerFile)) {
+      workerFile = path.resolve(workerDir, "parse-worker.ts");
     }
     
     const worker = new Worker(workerFile, {
@@ -118,8 +121,7 @@ const parseVolumeInWorker = async (
         generatedAtMs,
         product,
       },
-      // Note: If using .ts directly with ts-node, execArgv needs to be set, but compiled .js won't need it.
-      execArgv: workerFile.endsWith('.ts') ? ['-r', 'ts-node/register'] : undefined
+      execArgv: workerFile.endsWith('.ts') ? ['--loader', 'ts-node/esm'] : undefined
     });
 
     const timer = setTimeout(() => {
