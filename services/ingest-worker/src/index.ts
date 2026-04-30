@@ -29,6 +29,8 @@ import {
 } from "@nexrad-3d/contracts";
 import { getReaderForFile, parseNexradGeneratedAtMs } from "@nexrad-3d/radar-parser";
 import { createClient } from "redis";
+import { Worker } from "worker_threads";
+import path from "path";
 
 const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 const noaaBaseUrl =
@@ -40,6 +42,113 @@ const pollIntervalSeconds = parseInt(
   10
 );
 const maxFilesPerPoll = parseInt(process.env.INGEST_MAX_FILES_PER_POLL || "3", 10);
+const fileTimeoutMs = parseInt(
+  process.env.INGEST_FILE_TIMEOUT_MS || "120000",
+  10
+);
+const fetchTimeoutMs = parseInt(
+  process.env.INGEST_FETCH_TIMEOUT_MS || "20000",
+  10
+);
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
+const withTimeout = async <T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string
+): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(timeoutMessage));
+        }, Math.max(1, timeoutMs));
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+};
+
+const fetchWithTimeout = async (url: string): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, fetchTimeoutMs));
+
+  try {
+    return await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`request timed out after ${fetchTimeoutMs}ms: ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const parseVolumeInWorker = async (
+  buffer: ArrayBuffer,
+  filename: string,
+  siteId: string,
+  generatedAtMs: number,
+  product: VolumeProduct
+): Promise<{ data: Uint8Array; metadata: any }> => {
+  return new Promise((resolve, reject) => {
+    let workerFile = path.resolve(__dirname, "parse-worker.js");
+    // Fallback for ts-node / direct ts execution
+    if (!workerFile.endsWith('.js') && !require('fs').existsSync(workerFile)) {
+      workerFile = path.resolve(__dirname, "parse-worker.ts");
+    }
+    
+    const worker = new Worker(workerFile, {
+      workerData: {
+        buffer: new Uint8Array(buffer),
+        filename,
+        siteId,
+        generatedAtMs,
+        product,
+      },
+      // Note: If using .ts directly with ts-node, execArgv needs to be set, but compiled .js won't need it.
+      execArgv: workerFile.endsWith('.ts') ? ['-r', 'ts-node/register'] : undefined
+    });
+
+    const timer = setTimeout(() => {
+      worker.terminate();
+      reject(new Error(`worker parser timed out after ${fileTimeoutMs}ms`));
+    }, fileTimeoutMs);
+
+    worker.on("message", (msg) => {
+      clearTimeout(timer);
+      if (msg.success) {
+        resolve({ data: msg.data, metadata: msg.metadata });
+      } else {
+        reject(new Error(msg.error));
+      }
+    });
+
+    worker.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+
+    worker.on("exit", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(`worker stopped with exit code ${code}`));
+      }
+    });
+  });
+};
 
 /**
  * Parses the INGEST_PRODUCTS environment variable (a comma-separated string) 
@@ -304,7 +413,7 @@ const persistVolumeMetadata = async (metadata: RadarVolumeMeta): Promise<void> =
  */
 const fetchFileList = async (siteId: string): Promise<string[]> => {
   const dirListUrl = `${noaaBaseUrl}/${siteId}/dir.list`;
-  const response = await fetch(dirListUrl, { cache: "no-store" });
+  const response = await fetchWithTimeout(dirListUrl);
 
   if (!response.ok) {
     throw new Error(`dir.list request failed for ${siteId}: HTTP ${response.status}`);
@@ -324,17 +433,13 @@ const fetchFileList = async (siteId: string): Promise<string[]> => {
  */
 const processRadarFile = async (siteId: string, filename: string): Promise<void> => {
   const fileUrl = buildRadarFileUrl(siteId, filename);
-  const response = await fetch(fileUrl, { cache: "no-store" });
+  const response = await fetchWithTimeout(fileUrl);
 
   if (!response.ok) {
     throw new Error(`file request failed for ${filename}: HTTP ${response.status}`);
   }
 
   const sourceBuffer = await response.arrayBuffer();
-  const parser = getReaderForFile(filename, sourceBuffer);
-  if (!parser) {
-    throw new Error(`unsupported radar file format: ${filename}`);
-  }
 
   const generatedAtMs = parseNexradGeneratedAtMs(filename) ?? Date.now();
   const rawStorageKey = `${siteId}/latest/raw`;
@@ -345,18 +450,16 @@ const processRadarFile = async (siteId: string, filename: string): Promise<void>
 
   for (const product of ingestProducts) {
     try {
-      const artifact = await parser.loadVolume(sourceBuffer, product, {
+      const artifact = await parseVolumeInWorker(
+        sourceBuffer,
         filename,
         siteId,
         generatedAtMs,
-      });
+        product
+      );
 
       const parsedStorageKey = `${siteId}/latest/${product}.f32`;
-      const parsedVolumeBytes = new Uint8Array(
-        artifact.data.buffer,
-        artifact.data.byteOffset,
-        artifact.data.byteLength
-      );
+      const parsedVolumeBytes = artifact.data;
 
       await uploadObject(parsedStorageKey, parsedVolumeBytes, "application/octet-stream");
 
@@ -425,18 +528,30 @@ const pollRadarSite = async (siteId: string): Promise<void> => {
     for (const filename of filesToProcess) {
       console.log(`[${new Date().toISOString()}] Ingesting ${normalizedSiteId}/${filename}`);
       const t0 = Date.now();
-      await processRadarFile(normalizedSiteId, filename);
-      const t1 = Date.now();
-      
-      const timingKey = "ingestion:metrics:timing";
-      const existingAvgStr = await redis.hGet(timingKey, normalizedSiteId);
-      const currentAvg = existingAvgStr ? parseFloat(existingAvgStr) : 0;
-      const duration = t1 - t0;
-      const newAvg = currentAvg === 0 ? duration : currentAvg * 0.9 + duration * 0.1;
-      await redis.hSet(timingKey, normalizedSiteId, String(newAvg));
 
-      await redis.set(lastProcessedKey, filename, { EX: 60 * 60 * 24 * 7 });
-      console.log(`[${new Date().toISOString()}] Successfully ingested ${normalizedSiteId}/${filename} in ${duration}ms`);
+      try {
+        await withTimeout(
+          processRadarFile(normalizedSiteId, filename),
+          fileTimeoutMs,
+          `Parsing timeout after ${fileTimeoutMs}ms for ${normalizedSiteId}/${filename}`
+        );
+
+        const t1 = Date.now();
+        const timingKey = "ingestion:metrics:timing";
+        const existingAvgStr = await redis.hGet(timingKey, normalizedSiteId);
+        const currentAvg = existingAvgStr ? parseFloat(existingAvgStr) : 0;
+        const duration = t1 - t0;
+        const newAvg = currentAvg === 0 ? duration : currentAvg * 0.9 + duration * 0.1;
+        await redis.hSet(timingKey, normalizedSiteId, String(newAvg));
+
+        await redis.set(lastProcessedKey, filename, { EX: 60 * 60 * 24 * 7 });
+        console.log(
+          `[${new Date().toISOString()}] Successfully ingested ${normalizedSiteId}/${filename} in ${duration}ms`
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[${normalizedSiteId}/${filename}] failed: ${message}`);
+      }
     }
 
     await writeState({
@@ -480,16 +595,27 @@ const updateS3MetricsSize = async () => {
   try {
     let size = 0;
     let continuationToken: string | undefined = undefined;
-    do {
-      const resp: any = await s3.send(new ListObjectsV2Command({
-        Bucket: minioBucket,
-        ContinuationToken: continuationToken,
-      }));
-      for (const obj of (resp.Contents || [])) {
+    const maxPages = 10000;
+
+    for (let page = 0; page < maxPages; page += 1) {
+      const resp: any = await s3.send(
+        new ListObjectsV2Command({
+          Bucket: minioBucket,
+          ContinuationToken: continuationToken,
+        })
+      );
+
+      for (const obj of resp.Contents || []) {
         size += obj.Size || 0;
       }
-      continuationToken = resp.NextContinuationToken;
-    } while (continuationToken);
+
+      const nextToken = resp.NextContinuationToken;
+      if (!nextToken) {
+        break;
+      }
+
+      continuationToken = nextToken;
+    }
 
     await redis.set("ingestion:metrics:s3_size", String(size));
   } catch (error) {
@@ -521,6 +647,8 @@ const main = async () => {
       for (const siteId of validSites) {
         await pollRadarSite(siteId);
       }
+
+      await sleep(Math.max(1, pollIntervalSeconds) * 1000);
     }
   } catch (err) {
     console.error("Ingestion worker failed:", err);
