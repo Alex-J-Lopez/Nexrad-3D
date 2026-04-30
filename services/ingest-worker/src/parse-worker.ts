@@ -1,5 +1,5 @@
 import { parentPort, workerData } from "worker_threads";
-import { getReaderForFile, parseNexradGeneratedAtMs } from "@nexrad-3d/radar-parser";
+import { getReaderForFile } from "@nexrad-3d/radar-parser";
 import { VolumeProduct } from "@nexrad-3d/contracts";
 
 interface WorkerData {
