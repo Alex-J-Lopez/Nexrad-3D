@@ -121,7 +121,7 @@ const parseVolumeInWorker = async (
         generatedAtMs,
         product,
       },
-      execArgv: workerFile.endsWith('.ts') ? ['--loader', 'ts-node/esm'] : undefined
+      execArgv: workerFile.endsWith('.ts') ? ['--import', 'tsx'] : undefined
     });
 
     const timer = setTimeout(() => {
