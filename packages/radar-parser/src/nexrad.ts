@@ -359,7 +359,7 @@ function loadDecodedVolume(
     const sweepGateSizeMeters = pickGateSizeMeters(activeMoments);
     const sweepFirstGateMeters = pickFirstGateMeters(activeMoments);
     const radialBins =
-      activeMoments.reduce((maxGateCount, block) => {
+      activeMoments.reduce((maxGateCount: number, block: any): number => {
         if (!isHighResData(block) || !Array.isArray(block.moment_data)) {
           return maxGateCount;
         }
