@@ -37,7 +37,7 @@ import path from "path";
 const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 const noaaBaseUrl =
   process.env.NOAA_BASE_URL ||
-  "https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2";
+  "https://tgftp.nws.noaa.gov/data/radar/nexrad_level2";
 const radarSites = RADAR_SITES.map((site) => site.id);
 const pollIntervalSeconds = parseInt(
   process.env.POLL_INTERVAL_SECONDS || "30",

@@ -68,6 +68,7 @@ services:
       INGEST_FILE_TIMEOUT_MS: "120000"
       INGEST_FETCH_TIMEOUT_MS: "20000"
       OBJECT_STORAGE_ENABLED: "true"
+      NOAA_BASE_URL: ${NOAA_BASE_URL}
     depends_on:
       - redis
       - minio
