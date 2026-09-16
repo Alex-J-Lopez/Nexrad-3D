@@ -1,10 +1,12 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/contracts/package.json packages/contracts/
+COPY packages/radar-colors/package.json packages/radar-colors/
+COPY packages/radar-parser/package.json packages/radar-parser/
 COPY apps/nexrad/package.json apps/nexrad/
 RUN npm ci --workspace=@nexrad-3d/nexrad --include-workspace-root
 
@@ -15,6 +17,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build -w @nexrad-3d/contracts
+RUN npm run build -w @nexrad-3d/radar-parser
+RUN npm run build -w @nexrad-3d/radar-colors
 RUN npm run build -w @nexrad-3d/nexrad
 
 # Production runner
