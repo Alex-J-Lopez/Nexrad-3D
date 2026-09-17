@@ -15,6 +15,11 @@ export interface ParserLoadContext {
   generatedAtMs?: number;
 }
 
+export interface ProductVolumeResult {
+  product: VolumeProduct;
+  artifact: VolumeArtifact;
+}
+
 export interface RadarReader {
   /**
    * Read and parse a complete radar file from disk or buffer.
@@ -25,6 +30,16 @@ export interface RadarReader {
     product: VolumeProduct,
     context: ParserLoadContext
   ): Promise<VolumeArtifact>;
+
+  /**
+   * Decode the archive once and extract multiple volume products.
+   * Readers that omit this fall back to sequential `loadVolume` calls.
+   */
+  loadVolumes?(
+    sourceBuffer: ArrayBuffer,
+    products: VolumeProduct[],
+    context: ParserLoadContext
+  ): Promise<ProductVolumeResult[]>;
 }
 
 /**

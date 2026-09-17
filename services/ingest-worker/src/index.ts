@@ -27,12 +27,13 @@ import {
   type RadarVolumeMeta,
   type StreamEventPayload,
 } from "@nexrad-3d/contracts";
-import { getReaderForFile, parseNexradGeneratedAtMs } from "@nexrad-3d/radar-parser";
+import { parseNexradGeneratedAtMs } from "@nexrad-3d/radar-parser";
 import { createClient } from "redis";
 import { Worker } from "worker_threads";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import path from "path";
+import { mapWithConcurrency } from "./concurrency.js";
 
 const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 const noaaBaseUrl =
@@ -52,6 +53,11 @@ const fetchTimeoutMs = parseInt(
   process.env.INGEST_FETCH_TIMEOUT_MS || "20000",
   10
 );
+const parsedSiteConcurrency = parseInt(process.env.INGEST_SITE_CONCURRENCY || "4", 10);
+const siteConcurrency =
+  Number.isFinite(parsedSiteConcurrency) && parsedSiteConcurrency > 0
+    ? parsedSiteConcurrency
+    : 4;
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
@@ -98,55 +104,93 @@ const fetchWithTimeout = async (url: string): Promise<Response> => {
   }
 };
 
-const parseVolumeInWorker = async (
+type ParsedProductArtifact = {
+  product: VolumeProduct;
+  data: Uint8Array;
+  metadata: RadarVolumeMeta;
+};
+
+const parseVolumesInWorker = async (
   buffer: ArrayBuffer,
   filename: string,
   siteId: string,
   generatedAtMs: number,
-  product: VolumeProduct
-): Promise<{ data: Uint8Array; metadata: any }> => {
+  products: VolumeProduct[]
+): Promise<ParsedProductArtifact[]> => {
   return new Promise((resolve, reject) => {
-    const workerDir = fileURLToPath(new URL('.', import.meta.url));
+    const workerDir = fileURLToPath(new URL(".", import.meta.url));
     let workerFile = path.resolve(workerDir, "parse-worker.js");
     // Fallback when the compiled .js file is missing (e.g. running via tsx/ts-node)
     if (!existsSync(workerFile)) {
       workerFile = path.resolve(workerDir, "parse-worker.ts");
     }
-    
+
     const worker = new Worker(workerFile, {
       workerData: {
         buffer: new Uint8Array(buffer),
         filename,
         siteId,
         generatedAtMs,
-        product,
+        products,
       },
-      execArgv: workerFile.endsWith('.ts') ? ['--import', 'tsx'] : undefined
+      execArgv: workerFile.endsWith(".ts") ? ["--import", "tsx"] : undefined,
     });
+
+    let settled = false;
+
+    const finish = (fn: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
 
     const timer = setTimeout(() => {
       worker.terminate();
-      reject(new Error(`worker parser timed out after ${fileTimeoutMs}ms`));
+      finish(() => reject(new Error(`worker parser timed out after ${fileTimeoutMs}ms`)));
     }, fileTimeoutMs);
 
     worker.on("message", (msg) => {
-      clearTimeout(timer);
-      if (msg.success) {
-        resolve({ data: msg.data, metadata: msg.metadata });
-      } else {
-        reject(new Error(msg.error));
+      if (!msg.success) {
+        finish(() => reject(new Error(msg.error)));
+        return;
       }
+
+      const results = (msg.results || []) as Array<{
+        product: VolumeProduct;
+        success: boolean;
+        data?: Uint8Array;
+        metadata?: RadarVolumeMeta;
+        error?: string;
+      }>;
+
+      const parsed: ParsedProductArtifact[] = [];
+      for (const result of results) {
+        if (!result.success || !result.data || !result.metadata) {
+          console.warn(
+            `[${siteId}/${filename}] product ${result.product}: ${result.error || "parse failed"}`
+          );
+          continue;
+        }
+        parsed.push({
+          product: result.product,
+          data: result.data,
+          metadata: result.metadata,
+        });
+      }
+
+      finish(() => resolve(parsed));
     });
 
     worker.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
+      finish(() => reject(err));
     });
 
     worker.on("exit", (code) => {
-      clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error(`worker stopped with exit code ${code}`));
+        finish(() => reject(new Error(`worker stopped with exit code ${code}`)));
       }
     });
   });
@@ -448,54 +492,55 @@ const processRadarFile = async (siteId: string, filename: string): Promise<void>
   await uploadObject(rawStorageKey, sourceBuffer, "application/octet-stream");
 
   const ingestProducts = parseIngestProductList();
-  let anyProductSucceeded = false;
+  const parsedProducts = await parseVolumesInWorker(
+    sourceBuffer,
+    filename,
+    siteId,
+    generatedAtMs,
+    ingestProducts
+  );
 
-  for (const product of ingestProducts) {
-    try {
-      const artifact = await parseVolumeInWorker(
-        sourceBuffer,
-        filename,
-        siteId,
-        generatedAtMs,
-        product
-      );
+  const productOutcomes = await Promise.all(
+    parsedProducts.map(async (artifact) => {
+      try {
+        const parsedStorageKey = `${siteId}/latest/${artifact.product}.f32`;
+        const parsedVolumeBytes = artifact.data;
 
-      const parsedStorageKey = `${siteId}/latest/${product}.f32`;
-      const parsedVolumeBytes = artifact.data;
+        await uploadObject(parsedStorageKey, parsedVolumeBytes, "application/octet-stream");
 
-      await uploadObject(parsedStorageKey, parsedVolumeBytes, "application/octet-stream");
-
-      const metadata: RadarVolumeMeta = {
-        ...artifact.metadata,
-        siteId,
-        product,
-        generatedAtMs,
-        volumeId: `${siteId}-${generatedAtMs}-${product}`,
-        storageKey: parsedStorageKey,
-      };
-
-      await persistVolumeMetadata(metadata);
-
-      await publishEvent({
-        eventType: "volume.ready",
-        data: {
+        const metadata: RadarVolumeMeta = {
+          ...artifact.metadata,
           siteId,
-          product: metadata.product,
-          volumeId: metadata.volumeId,
-          generatedAtMs: metadata.generatedAtMs,
-          storageKey: metadata.storageKey,
-        },
-        emittedAtMs: Date.now(),
-      });
+          product: artifact.product,
+          generatedAtMs,
+          volumeId: `${siteId}-${generatedAtMs}-${artifact.product}`,
+          storageKey: parsedStorageKey,
+        };
 
-      anyProductSucceeded = true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[${siteId}/${filename}] product ${product}: ${message}`);
-    }
-  }
+        await persistVolumeMetadata(metadata);
 
-  if (!anyProductSucceeded) {
+        await publishEvent({
+          eventType: "volume.ready",
+          data: {
+            siteId,
+            product: metadata.product,
+            volumeId: metadata.volumeId,
+            generatedAtMs: metadata.generatedAtMs,
+            storageKey: metadata.storageKey,
+          },
+          emittedAtMs: Date.now(),
+        });
+
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[${siteId}/${filename}] product ${artifact.product}: ${message}`);
+        return false;
+      }
+    })
+  );
+
+  if (!productOutcomes.some(Boolean)) {
     throw new Error(`No Level-II moments could be extracted from ${filename}`);
   }
 }
@@ -640,15 +685,15 @@ const main = async () => {
     }
 
     const productList = parseIngestProductList().join(", ");
+    const validSites = radarSites.map((value) => value.trim()).filter(Boolean);
     console.log(
-      `Ingestion worker started. Polling ${radarSites.join(", ")} continuously; products: ${productList}`
+      `Ingestion worker started. Polling ${validSites.length} sites (concurrency ${siteConcurrency}); products: ${productList}`
     );
 
-    const validSites = radarSites.map((value) => value.trim()).filter(Boolean);
     while (true) {
-      for (const siteId of validSites) {
-        await pollRadarSite(siteId);
-      }
+      await mapWithConcurrency(validSites, siteConcurrency, (siteId) =>
+        pollRadarSite(siteId)
+      );
 
       await sleep(Math.max(1, pollIntervalSeconds) * 1000);
     }

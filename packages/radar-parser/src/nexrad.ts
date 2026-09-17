@@ -4,7 +4,7 @@ import {
   type HighResData,
   type MessageHeader,
 } from "nexrad-level-2-data";
-import type { ParserLoadContext, RadarReader } from "./index.js";
+import type { ParserLoadContext, ProductVolumeResult, RadarReader } from "./index.js";
 
 const DEFAULT_AZIMUTH_BINS = 360;
 const DEFAULT_RADIAL_BINS = 200;
@@ -295,15 +295,17 @@ function loadBootstrapVolume(
   };
 }
 
-function loadDecodedVolume(
-  sourceBuffer: ArrayBuffer,
+function openLevel2Radar(sourceBuffer: ArrayBuffer): Level2Radar {
+  return new Level2Radar(Buffer.from(sourceBuffer), {
+    logger: false,
+  });
+}
+
+function extractDecodedVolume(
+  radar: Level2Radar,
   product: VolumeProduct,
   context: ParserLoadContext
 ): VolumeArtifact {
-  const radar = new Level2Radar(Buffer.from(sourceBuffer), {
-    logger: false,
-  });
-
   const elevations = radar
     .listElevations()
     .map((value) => Number(value))
@@ -535,12 +537,47 @@ export class NexradReader implements RadarReader {
     product: VolumeProduct,
     context: ParserLoadContext
   ): Promise<VolumeArtifact> {
+    const [result] = await this.loadVolumes(sourceBuffer, [product], context);
+    if (!result) {
+      throw new Error(`Failed to load volume product ${product}`);
+    }
+    return result.artifact;
+  }
+
+  async loadVolumes(
+    sourceBuffer: ArrayBuffer,
+    products: VolumeProduct[],
+    context: ParserLoadContext
+  ): Promise<ProductVolumeResult[]> {
+    let radar: Level2Radar;
+
     try {
-      return loadDecodedVolume(sourceBuffer, product, context);
+      radar = openLevel2Radar(sourceBuffer);
     } catch (decodeError) {
       const message = decodeError instanceof Error ? decodeError.message : String(decodeError);
       console.warn(`[NexradReader] Falling back to bootstrap decode: ${message}`);
-      return loadBootstrapVolume(sourceBuffer, product, context);
+      return products.map((product) => ({
+        product,
+        artifact: loadBootstrapVolume(sourceBuffer, product, context),
+      }));
     }
+
+    return products.map((product) => {
+      try {
+        return {
+          product,
+          artifact: extractDecodedVolume(radar, product, context),
+        };
+      } catch (extractError) {
+        const message = extractError instanceof Error ? extractError.message : String(extractError);
+        console.warn(
+          `[NexradReader] Falling back to bootstrap decode for ${product}: ${message}`
+        );
+        return {
+          product,
+          artifact: loadBootstrapVolume(sourceBuffer, product, context),
+        };
+      }
+    });
   }
 }
