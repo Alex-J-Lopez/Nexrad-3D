@@ -9,22 +9,31 @@ import { useFlightData } from "../hooks/useFlightData";
 
 export type MapStyle = "dark" | "light" | "satellite";
 
+// CARTO's raster basemaps now require a (free) API key; keyless requests get an
+// "API KEY REQUIRED" watermark burned into the tiles. Request one at
+// https://carto.com/basemaps/apikey. NEXT_PUBLIC_* vars are inlined by Next.js at
+// build time, so this must be provided when the frontend image is built.
+const CARTO_API_KEY = process.env.NEXT_PUBLIC_CARTO_API_KEY;
+const CARTO_KEY_QUERY = CARTO_API_KEY
+  ? `?key=${encodeURIComponent(CARTO_API_KEY)}`
+  : "";
+
 export const MAP_STYLES: Record<MapStyle, { tiles: string[], attribution: string }> = {
   dark: {
     tiles: [
-      "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+      `https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
+      `https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
+      `https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
+      `https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
     ],
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
   },
   light: {
     tiles: [
-      "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      `https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
+      `https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
+      `https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
+      `https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png${CARTO_KEY_QUERY}`,
     ],
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
   },

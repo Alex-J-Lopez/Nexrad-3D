@@ -16,6 +16,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time, so they
+# must be available here (passed via docker-compose build.args).
+ARG NEXT_PUBLIC_CARTO_API_KEY=""
+ENV NEXT_PUBLIC_CARTO_API_KEY=$NEXT_PUBLIC_CARTO_API_KEY
 RUN npm run build -w @nexrad-3d/contracts
 RUN npm run build -w @nexrad-3d/radar-parser
 RUN npm run build -w @nexrad-3d/radar-colors
